@@ -9,10 +9,12 @@ interface WakeLockSentinel extends EventTarget {
   release(): Promise<void>
 }
 
-interface NavigatorWithWakeLock extends Navigator {
-  wakeLock?: {
-    request(type: 'screen'): Promise<WakeLockSentinel>
-  }
+interface WakeLock {
+  request(type: 'screen'): Promise<WakeLockSentinel>
+}
+
+interface NavigatorWithWakeLock {
+  wakeLock?: WakeLock
 }
 import {
   Dialog,
@@ -63,7 +65,7 @@ export function QRScannerModal({
 
   const enableBrightnessAndWakeLock = async () => {
     // Request screen wake lock to prevent screen from dimming
-    const nav = navigator as NavigatorWithWakeLock
+    const nav = navigator as unknown as NavigatorWithWakeLock
     if (nav.wakeLock) {
       try {
         const wakeLock = await nav.wakeLock.request('screen')
