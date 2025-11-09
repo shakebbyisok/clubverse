@@ -144,7 +144,6 @@ export function QRScannerModal({
             }
           },
           aspectRatio: 1.0,
-          supportedScanTypes: [0, 1], // Support both QR_CODE and BARCODE
         },
         (decodedText) => {
           handleQRCodeScanned(decodedText)
