@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, MapPin } from 'lucide-react'
@@ -48,57 +49,63 @@ export function AddressAutocomplete({
   const [showDropdown, setShowDropdown] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null)
 
-  // Load Google Maps Places API script
+  // Wait for Google Maps Places API to be available (loaded globally in layout)
   useEffect(() => {
-    // Check if script is already loaded
+    // Check if already loaded
     if (window.google?.maps?.places) {
       setIsScriptLoaded(true)
       return
     }
 
-    // Check if script is already being loaded
-    if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-      // Wait for script to load
-      const checkGoogle = setInterval(() => {
-        if (window.google?.maps?.places) {
-          setIsScriptLoaded(true)
-          clearInterval(checkGoogle)
+    // Poll for Places library to become available
+    let attempts = 0
+    const maxAttempts = 100 // 10 seconds total
+    
+    const checkInterval = setInterval(() => {
+      attempts++
+      
+      if (window.google?.maps?.places) {
+        setIsScriptLoaded(true)
+        clearInterval(checkInterval)
+      } else if (attempts >= maxAttempts) {
+        clearInterval(checkInterval)
+        console.error('Google Maps Places library not available after waiting')
+        
+        // Fallback: try to load it manually if still not available
+        const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+        if (apiKey && !document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]')) {
+          const script = document.createElement('script')
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
+          script.async = true
+          script.defer = true
+          
+          script.onload = () => {
+            // Check again after script loads
+            setTimeout(() => {
+              if (window.google?.maps?.places) {
+                setIsScriptLoaded(true)
+              }
+            }, 500)
+          }
+          
+          document.head.appendChild(script)
         }
-      }, 100)
-      return () => clearInterval(checkGoogle)
-    }
-
-    // Get API key from environment
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
-    if (!apiKey) {
-      console.warn('NEXT_PUBLIC_GOOGLE_MAPS_KEY not found. Address autocomplete will not work.')
-      return
-    }
-
-    // Load Google Maps script
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
-    script.async = true
-    script.defer = true
-    script.onload = () => {
-      setTimeout(() => {
-        if (window.google?.maps?.places) {
-          setIsScriptLoaded(true)
-        } else {
-          console.error('Google Maps Places library not available after script load')
-        }
-      }, 100)
-    }
-    script.onerror = () => {
-      console.error('Failed to load Google Maps script')
-    }
-    document.head.appendChild(script)
+      }
+    }, 100)
+    
+    return () => clearInterval(checkInterval)
   }, [])
 
   // Initialize services when script is loaded
   useEffect(() => {
-    if (!isScriptLoaded) return
+    if (!isScriptLoaded) {
+      console.log('AddressAutocomplete: Script not loaded yet')
+      return
+    }
+
+    console.log('AddressAutocomplete: Script loaded, initializing services...')
 
     try {
       // Initialize AutocompleteService for getting predictions
@@ -107,6 +114,8 @@ export function AddressAutocomplete({
       // Initialize PlacesService for getting place details
       const dummyDiv = document.createElement('div')
       placesServiceRef.current = new window.google.maps.places.PlacesService(dummyDiv)
+      
+      console.log('AddressAutocomplete: Services initialized successfully')
     } catch (error) {
       console.error('Failed to initialize Google Places services:', error)
     }
@@ -118,6 +127,20 @@ export function AddressAutocomplete({
       setInputValue(value)
     }
   }, [value])
+
+  // Update dropdown position when input changes
+  useEffect(() => {
+    if (showDropdown && inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      })
+    } else {
+      setDropdownPosition(null)
+    }
+  }, [showDropdown, suggestions])
 
   // Fetch suggestions from Google Places API
   const fetchSuggestions = (query: string) => {
@@ -137,11 +160,16 @@ export function AddressAutocomplete({
       (predictions, status) => {
         setIsLoading(false)
         
+        console.log('Places API response:', { status, predictionsCount: predictions?.length })
+        
         if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-          setSuggestions(predictions.slice(0, 5)) // Limit to 5 suggestions
+          const limitedPredictions = predictions.slice(0, 5)
+          setSuggestions(limitedPredictions)
           setShowDropdown(true)
           setSelectedIndex(-1)
+          console.log('Showing dropdown with', limitedPredictions.length, 'suggestions')
         } else {
+          console.warn('Places API error:', status)
           setSuggestions([])
           setShowDropdown(false)
         }
@@ -334,9 +362,20 @@ export function AddressAutocomplete({
           )}
         </div>
 
-        {/* Custom Dropdown - Positioned below input */}
-        {showDropdown && suggestions.length > 0 && (
-          <div className="absolute z-50 w-full top-full mt-1 bg-popover border border-border/40 rounded-[var(--radius)] shadow-lg max-h-60 overflow-y-auto scrollbar-elegant">
+        {/* Custom Dropdown - Render in portal to avoid modal clipping */}
+        {showDropdown && suggestions.length > 0 && dropdownPosition && typeof window !== 'undefined' && createPortal(
+          <div 
+            className="fixed bg-background border-2 border-border rounded-md shadow-xl max-h-60 overflow-y-auto"
+            style={{ 
+              zIndex: 10000,
+              top: `${dropdownPosition.top}px`,
+              left: `${dropdownPosition.left}px`,
+              width: `${dropdownPosition.width}px`,
+              backgroundColor: 'hsl(var(--background))',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+            }}
+            onMouseDown={(e) => e.preventDefault()} // Prevent click outside from closing
+          >
             {suggestions.map((suggestion, index) => (
               <button
                 key={suggestion.place_id}
@@ -345,14 +384,15 @@ export function AddressAutocomplete({
                 className={cn(
                   'w-full text-left px-3 py-2 text-sm transition-colors',
                   'hover:bg-accent hover:text-accent-foreground',
-                  'first:rounded-t-[var(--radius)] last:rounded-b-[var(--radius)]',
+                  'first:rounded-t-md last:rounded-b-md',
                   index === selectedIndex && 'bg-accent text-accent-foreground'
                 )}
               >
                 {suggestion.description}
               </button>
             ))}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
       {error && (

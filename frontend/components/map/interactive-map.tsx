@@ -8,6 +8,7 @@ import { ClubInfoBadge } from './club-info-badge'
 import { Navigation } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { calculateSpiralOffsets } from '@/lib/utils/marker-spacing'
 
 interface InteractiveMapProps {
   clubs: Club[]
@@ -135,6 +136,19 @@ export function InteractiveMap({
     [clubs]
   )
 
+  // Calculate marker offsets to prevent overlap
+  const spacedMarkers = useMemo(() => {
+    if (clubsWithLocation.length === 0) return []
+    
+    const markers = clubsWithLocation.map(club => ({
+      lat: Number(club.latitude!),
+      lng: Number(club.longitude!),
+      id: club.id,
+    }))
+    
+    return calculateSpiralOffsets(markers, 80) // 80 meters minimum distance - balanced spacing
+  }, [clubsWithLocation])
+
   // Calculate optimal bounds for fast loading
   const mapConfig = useMemo(() => {
     if (clubsWithLocation.length === 0) {
@@ -209,20 +223,21 @@ export function InteractiveMap({
     useEffect(() => {
       if (map) {
         onMapLoad(map)
-        
-        // Fit bounds to show all clubs if no user location
-        if (!userLocation && clubsWithLocation.length > 0 && typeof window !== 'undefined' && window.google?.maps) {
-          const bounds = new window.google.maps.LatLngBounds()
-          clubsWithLocation.forEach((club) => {
-            bounds.extend({
-              lat: Number(club.latitude),
-              lng: Number(club.longitude),
-            })
-          })
-          // Fit with minimal padding for faster loading
-          map.fitBounds(bounds, 40)
+    
+    // Fit bounds to show all clubs if no user location
+    if (!userLocation && clubsWithLocation.length > 0 && typeof window !== 'undefined' && window.google?.maps) {
+      const bounds = new window.google.maps.LatLngBounds()
+      // Use original positions for bounds calculation (not spaced positions)
+      clubsWithLocation.forEach((club) => {
+        bounds.extend({
+          lat: Number(club.latitude),
+          lng: Number(club.longitude),
+        })
+      })
+      // Fit with padding to account for marker spacing
+      map.fitBounds(bounds, 60)
         }
-      }
+    }
     }, [map, onMapLoad, userLocation, clubsWithLocation])
     
     return null
@@ -322,18 +337,21 @@ export function InteractiveMap({
           )}
 
           {/* Club markers with logos */}
-          {clubsWithLocation.map((club) => (
-            <CustomClubMarker
-              key={club.id}
-              club={club}
-              position={{
-                lat: Number(club.latitude!),
-                lng: Number(club.longitude!),
-              }}
-              isSelected={selectedClub?.id === club.id}
-              onClick={() => onClubSelect(club)}
-            />
-          ))}
+          {spacedMarkers.map((spacedMarker) => {
+            const club = clubsWithLocation.find(c => c.id === spacedMarker.id)!
+            return (
+              <CustomClubMarker
+                key={club.id}
+                club={club}
+                position={{
+                  lat: spacedMarker.lat + spacedMarker.offsetLat,
+                  lng: spacedMarker.lng + spacedMarker.offsetLng,
+                }}
+                isSelected={selectedClub?.id === club.id}
+                onClick={() => onClubSelect(club)}
+              />
+            )
+          })}
         </Map>
 
         {/* Club Info Badge - appears when club is selected */}
