@@ -1,6 +1,19 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+
+// Type definition for WakeLockSentinel
+interface WakeLockSentinel extends EventTarget {
+  released: boolean
+  type: 'screen'
+  release(): Promise<void>
+}
+
+interface NavigatorWithWakeLock extends Navigator {
+  wakeLock?: {
+    request(type: 'screen'): Promise<WakeLockSentinel>
+  }
+}
 import {
   Dialog,
   DialogContent,
@@ -30,18 +43,77 @@ export function QRScannerModal({
   const [isProcessing, setIsProcessing] = useState(false)
   const scannerRef = useRef<HTMLDivElement>(null)
   const html5QrCodeRef = useRef<any>(null)
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
+  const originalBrightnessRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (open) {
+      enableBrightnessAndWakeLock()
       startScanner()
     } else {
+      disableBrightnessAndWakeLock()
       stopScanner()
     }
 
     return () => {
+      disableBrightnessAndWakeLock()
       stopScanner()
     }
   }, [open])
+
+  const enableBrightnessAndWakeLock = async () => {
+    // Request screen wake lock to prevent screen from dimming
+    const nav = navigator as NavigatorWithWakeLock
+    if (nav.wakeLock) {
+      try {
+        const wakeLock = await nav.wakeLock.request('screen')
+        wakeLockRef.current = wakeLock
+        
+        // Handle wake lock release (e.g., when user switches tabs)
+        wakeLock.addEventListener('release', () => {
+          wakeLockRef.current = null
+        })
+      } catch (err) {
+        console.log('Wake lock not supported or permission denied:', err)
+      }
+    }
+
+    // Attempt to set brightness to max (experimental API, limited support)
+    if ('screen' in window && 'brightness' in (window as any).screen) {
+      try {
+        const screen = (window as any).screen
+        // Store original brightness
+        originalBrightnessRef.current = screen.brightness || 1.0
+        // Set to max brightness
+        screen.brightness = 1.0
+      } catch (err) {
+        console.log('Brightness control not supported:', err)
+      }
+    }
+  }
+
+  const disableBrightnessAndWakeLock = async () => {
+    // Release wake lock
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release()
+        wakeLockRef.current = null
+      } catch (err) {
+        console.log('Error releasing wake lock:', err)
+      }
+    }
+
+    // Restore original brightness
+    if (originalBrightnessRef.current !== null && 'screen' in window && 'brightness' in (window as any).screen) {
+      try {
+        const screen = (window as any).screen
+        screen.brightness = originalBrightnessRef.current
+        originalBrightnessRef.current = null
+      } catch (err) {
+        console.log('Error restoring brightness:', err)
+      }
+    }
+  }
 
   const startScanner = async () => {
     if (!scannerRef.current) return
