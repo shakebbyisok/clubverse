@@ -115,9 +115,26 @@ jobs:
             if [ -f "frontend/package.json" ]; then
               echo "Installing frontend dependencies..."
               cd frontend
-              npm ci --production 2>/dev/null || npm install --production
+              npm ci 2>/dev/null || npm install
               cd ..
             fi
+            
+            # Set frontend environment variables and rebuild
+            echo "Setting frontend environment variables and rebuilding..."
+            cd frontend
+            cat > .env.production << 'ENVEOF'
+NEXT_PUBLIC_BACKEND_URL=http://api.clubverse.es
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSyCyGTyq6vn96nDg-vP7lYecLJOSvZYf1ag
+ENVEOF
+            
+            # Clean old build
+            rm -rf .next
+            
+            # Rebuild frontend with environment variables
+            echo "Rebuilding frontend..."
+            npm run build
+            
+            cd ..
             
             # Run database migrations (optional - uncomment if using Alembic)
             # cd backend
