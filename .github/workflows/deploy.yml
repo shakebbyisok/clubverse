@@ -111,14 +111,6 @@ jobs:
               pip install -q -r backend/requirements.txt
             fi
             
-            # Install frontend dependencies if needed
-            if [ -f "frontend/package.json" ]; then
-              echo "Installing frontend dependencies..."
-              cd frontend
-              npm ci 2>/dev/null || npm install
-              cd ..
-            fi
-            
             # Set frontend environment variables and rebuild
             echo "Setting frontend environment variables and rebuilding..."
             cd frontend
@@ -131,8 +123,14 @@ jobs:
             echo "Environment file contents:"
             cat .env.production
             
-            # Clean old build
+            # Clean old build and node_modules to ensure fresh install
+            echo "Cleaning old build and dependencies..."
             rm -rf .next
+            rm -rf node_modules
+            
+            # Install ALL dependencies (including devDependencies needed for build)
+            echo "Installing frontend dependencies (including devDependencies)..."
+            npm install
             
             # Rebuild frontend with environment variables
             echo "Rebuilding frontend..."
