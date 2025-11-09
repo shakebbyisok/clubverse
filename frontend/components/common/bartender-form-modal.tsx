@@ -85,15 +85,15 @@ export function BartenderFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[425px] gap-0 p-0">
+        <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle>Add Bartender</DialogTitle>
           <DialogDescription>
             Create a new bartender account for this club. They will be able to log in and manage orders.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
+          <div className="px-6 py-4 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -134,7 +134,7 @@ export function BartenderFormModal({
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-6 pb-6">
             <Button
               type="button"
               variant="outline"

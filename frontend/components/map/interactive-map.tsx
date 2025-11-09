@@ -340,16 +340,16 @@ export function InteractiveMap({
           {spacedMarkers.map((spacedMarker) => {
             const club = clubsWithLocation.find(c => c.id === spacedMarker.id)!
             return (
-              <CustomClubMarker
-                key={club.id}
-                club={club}
-                position={{
+            <CustomClubMarker
+              key={club.id}
+              club={club}
+              position={{
                   lat: spacedMarker.lat + spacedMarker.offsetLat,
                   lng: spacedMarker.lng + spacedMarker.offsetLng,
-                }}
-                isSelected={selectedClub?.id === club.id}
-                onClick={() => onClubSelect(club)}
-              />
+              }}
+              isSelected={selectedClub?.id === club.id}
+              onClick={() => onClubSelect(club)}
+            />
             )
           })}
         </Map>

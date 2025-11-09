@@ -49,7 +49,7 @@ export function ElegantList({
   }
 
   return (
-    <div className={cn('space-y-0.5', className)}>
+    <div className={cn('space-y-3', className)}>
       {items.map((item) => (
         <div
           key={item.id}

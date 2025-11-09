@@ -1,4 +1,4 @@
-name: Deploy to GCP VM
+name: Deploy Clubverse to GCP VM
 
 on:
   push:
@@ -36,20 +36,10 @@ jobs:
         run: |
           mkdir -p deploy/frontend
           cp -r backend deploy/
-          # Copy built .next folder
           cp -r frontend/.next deploy/frontend-next
-          # Copy source files needed for rebuilding
           cp frontend/package.json frontend/package-lock.json deploy/frontend/
           cp frontend/next.config.js deploy/frontend/ 2>/dev/null || true
-          cp frontend/tsconfig.json deploy/frontend/ 2>/dev/null || true
-          cp frontend/tailwind.config.js deploy/frontend/ 2>/dev/null || true
-          cp frontend/postcss.config.js deploy/frontend/ 2>/dev/null || true
-          cp -r frontend/app deploy/frontend/ 2>/dev/null || true
-          cp -r frontend/components deploy/frontend/ 2>/dev/null || true
-          cp -r frontend/lib deploy/frontend/ 2>/dev/null || true
-          cp -r frontend/types deploy/frontend/ 2>/dev/null || true
-          cp -r frontend/public deploy/frontend/ 2>/dev/null || true
-          # Note: .env.local files are NOT copied for security - set env vars on VM
+          cp frontend/public deploy/frontend/ -r 2>/dev/null || true
           tar -czf deploy.tar.gz deploy/
 
       - name: Deploy to GCP VM
@@ -94,13 +84,6 @@ jobs:
             cp -r /tmp/deploy/frontend-next frontend/.next
             cp /tmp/deploy/frontend/package*.json frontend/ 2>/dev/null || true
             cp /tmp/deploy/frontend/next.config.js frontend/ 2>/dev/null || true
-            cp /tmp/deploy/frontend/tsconfig.json frontend/ 2>/dev/null || true
-            cp /tmp/deploy/frontend/tailwind.config.js frontend/ 2>/dev/null || true
-            cp /tmp/deploy/frontend/postcss.config.js frontend/ 2>/dev/null || true
-            cp -r /tmp/deploy/frontend/app frontend/ 2>/dev/null || true
-            cp -r /tmp/deploy/frontend/components frontend/ 2>/dev/null || true
-            cp -r /tmp/deploy/frontend/lib frontend/ 2>/dev/null || true
-            cp -r /tmp/deploy/frontend/types frontend/ 2>/dev/null || true
             cp -r /tmp/deploy/frontend/public frontend/ 2>/dev/null || true
             
             # Install backend dependencies if needed
@@ -118,12 +101,6 @@ jobs:
               npm ci --production 2>/dev/null || npm install --production
               cd ..
             fi
-            
-            # Run database migrations (optional - uncomment if using Alembic)
-            # cd backend
-            # source venv/bin/activate
-            # alembic upgrade head
-            # cd ..
             
             # Restart services
             echo "Restarting services..."
@@ -157,4 +134,3 @@ jobs:
             rm -rf /tmp/deploy
             
             echo "Deployment completed successfully!"
-

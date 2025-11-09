@@ -370,7 +370,7 @@ export default function ClubSettingsPage() {
                   Loading status...
                 </div>
               ) : stripeStatus?.stripe_account_status === 'active' ? (
-                <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     {/* Stripe Logo */}
                     <img 
@@ -379,9 +379,9 @@ export default function ClubSettingsPage() {
                       className="h-5 w-auto"
                     />
                     <div>
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold">Stripe Connected</span>
-                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">Ready to accept payments</p>
                     </div>
@@ -407,7 +407,7 @@ export default function ClubSettingsPage() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {stripeStatus?.stripe_account_status === 'pending'
+                      {stripeStatus?.stripe_account_status === 'pending'
                           ? 'Setup in progress'
                           : 'Connect Stripe to accept payments'}
                       </p>

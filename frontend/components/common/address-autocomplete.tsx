@@ -66,8 +66,8 @@ export function AddressAutocomplete({
     const checkInterval = setInterval(() => {
       attempts++
       
-      if (window.google?.maps?.places) {
-        setIsScriptLoaded(true)
+        if (window.google?.maps?.places) {
+          setIsScriptLoaded(true)
         clearInterval(checkInterval)
       } else if (attempts >= maxAttempts) {
         clearInterval(checkInterval)
@@ -76,24 +76,24 @@ export function AddressAutocomplete({
         // Fallback: try to load it manually if still not available
         const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
         if (apiKey && !document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]')) {
-          const script = document.createElement('script')
+    const script = document.createElement('script')
           script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
-          script.async = true
-          script.defer = true
+    script.async = true
+    script.defer = true
           
-          script.onload = () => {
+    script.onload = () => {
             // Check again after script loads
-            setTimeout(() => {
-              if (window.google?.maps?.places) {
-                setIsScriptLoaded(true)
+      setTimeout(() => {
+        if (window.google?.maps?.places) {
+          setIsScriptLoaded(true)
               }
             }, 500)
           }
           
           document.head.appendChild(script)
         }
-      }
-    }, 100)
+        }
+      }, 100)
     
     return () => clearInterval(checkInterval)
   }, [])
