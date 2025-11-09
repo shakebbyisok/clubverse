@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { clubsApi } from '@/lib/api/clubs'
 import { drinksApi, Drink } from '@/lib/api/drinks'
@@ -42,13 +42,7 @@ export default function ClubDrinksPage() {
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null)
   const { toast } = useToast()
 
-  useEffect(() => {
-    if (clubId) {
-      loadData()
-    }
-  }, [clubId])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -63,7 +57,13 @@ export default function ClubDrinksPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [clubId])
+
+  useEffect(() => {
+    if (clubId) {
+      loadData()
+    }
+  }, [clubId, loadData])
 
   const addToCart = (drinkId: string) => {
     setCart(prev => {
@@ -237,7 +237,7 @@ export default function ClubDrinksPage() {
             <Wine className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
             <h3 className="text-base font-semibold mb-1">No drinks available</h3>
             <p className="text-sm text-muted-foreground">
-              This club hasn't added any drinks yet
+              This club hasn&apos;t added any drinks yet
             </p>
           </div>
         ) : (

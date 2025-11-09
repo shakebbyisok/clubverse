@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Loader2, Edit, Trash2, List, CreditCard, CheckCircle2, AlertCircle, Building2 } from 'lucide-react'
@@ -54,9 +54,9 @@ export default function ClubSettingsPage() {
         window.history.replaceState({}, '', window.location.pathname)
       }, 1000)
     }
-  }, [])
+  }, [loadClubs, loadStripeStatus])
 
-  const loadStripeStatus = async () => {
+  const loadStripeStatus = useCallback(async () => {
     setIsLoadingStripe(true)
     try {
       const status = await stripeConnectApi.getStatus()
@@ -66,7 +66,7 @@ export default function ClubSettingsPage() {
     } finally {
       setIsLoadingStripe(false)
     }
-  }
+  }, [])
 
   const handleStripeOnboard = async () => {
     try {
@@ -89,7 +89,7 @@ export default function ClubSettingsPage() {
     }
   }
 
-  const loadClubs = async () => {
+  const loadClubs = useCallback(async () => {
     try {
       const data = await clubsApi.getMyClubs()
       setClubs(data)
@@ -116,7 +116,7 @@ export default function ClubSettingsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [toast])
 
   const handleCreate = () => {
     setEditingClub(null)
@@ -413,7 +413,7 @@ export default function ClubSettingsPage() {
                   </Button>
                   <div className="pt-2 border-t border-border/40">
                     <p className="text-xs text-muted-foreground">
-                      Connect your Stripe account to start accepting payments. You'll be redirected to Stripe to complete the setup process.
+                      Connect your Stripe account to start accepting payments. You&apos;ll be redirected to Stripe to complete the setup process.
                     </p>
                   </div>
                 </div>
@@ -447,7 +447,7 @@ export default function ClubSettingsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Club</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingClub?.name}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{deletingClub?.name}&quot;? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
