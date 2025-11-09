@@ -122,10 +122,14 @@ jobs:
             # Set frontend environment variables and rebuild
             echo "Setting frontend environment variables and rebuilding..."
             cd frontend
-            cat > .env.production << 'ENVEOF'
-NEXT_PUBLIC_BACKEND_URL=http://api.clubverse.es
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSyCyGTyq6vn96nDg-vP7lYecLJOSvZYf1ag
-ENVEOF
+            
+            # Create .env.production file
+            echo "NEXT_PUBLIC_BACKEND_URL=http://api.clubverse.es" > .env.production
+            echo "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSyCyGTyq6vn96nDg-vP7lYecLJOSvZYf1ag" >> .env.production
+            
+            # Verify file was created
+            echo "Environment file contents:"
+            cat .env.production
             
             # Clean old build
             rm -rf .next
@@ -133,6 +137,12 @@ ENVEOF
             # Rebuild frontend with environment variables
             echo "Rebuilding frontend..."
             npm run build
+            
+            # Verify build succeeded
+            if [ ! -d ".next" ]; then
+              echo "ERROR: Build failed - .next directory not created"
+              exit 1
+            fi
             
             cd ..
             
