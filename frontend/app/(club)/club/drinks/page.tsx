@@ -490,7 +490,7 @@ export default function DrinksPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Drink List</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingList?.name}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{deletingList?.name}&quot;? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

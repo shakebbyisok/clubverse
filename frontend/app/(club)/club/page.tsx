@@ -55,7 +55,7 @@ export default function ClubDashboardPage() {
           <CardContent>
             <div className="text-xl font-semibold">$2,450</div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Today's sales
+              Today&apos;s sales
             </p>
           </CardContent>
         </Card>
