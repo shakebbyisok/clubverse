@@ -17,8 +17,10 @@ def add_bartender(
     current_user: User = Depends(get_current_club_owner),
     db: Session = Depends(get_db)
 ):
-    """Add a bartender to a club (club owner only)."""
+    """Add a bartender to a club (club owner only). Creates user if doesn't exist."""
     from uuid import UUID
+    from app.core.security import get_password_hash
+    
     try:
         club_uuid = UUID(bartender_data.club_id)
     except ValueError:
@@ -26,6 +28,7 @@ def add_bartender(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid club ID format",
         )
+    
     # Verify club ownership
     club = db.query(Club).filter(
         Club.id == club_uuid,
@@ -38,30 +41,39 @@ def add_bartender(
             detail="Club not found or you don't have permission",
         )
     
-    # Find user by email
-    user = db.query(User).filter(User.email == bartender_data.user_email).first()
+    # Check if user already exists
+    user = db.query(User).filter(User.email == bartender_data.email).first()
     
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+    if user:
+        # User exists - check if already a bartender for this club
+        existing_bartender = db.query(Bartender).filter(
+            Bartender.user_id == user.id,
+            Bartender.club_id == club_uuid
+        ).first()
+        
+        if existing_bartender:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Bartender already added to this club",
+            )
+        
+        # Update user role to bartender if needed
+        if user.role != UserRole.BARTENDER:
+            user.role = UserRole.BARTENDER
+            if bartender_data.full_name:
+                user.full_name = bartender_data.full_name
+    else:
+        # Create new user with bartender role
+        hashed_password = get_password_hash(bartender_data.password)
+        user = User(
+            email=bartender_data.email,
+            hashed_password=hashed_password,
+            full_name=bartender_data.full_name,
+            role=UserRole.BARTENDER,
+            is_active=True,
         )
-    
-    # Update user role to bartender if needed
-    if user.role != UserRole.BARTENDER:
-        user.role = UserRole.BARTENDER
-    
-    # Check if bartender already exists for this club
-    existing_bartender = db.query(Bartender).filter(
-        Bartender.user_id == user.id,
-        Bartender.club_id == club_uuid
-    ).first()
-    
-    if existing_bartender:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bartender already added to this club",
-        )
+        db.add(user)
+        db.flush()  # Flush to get user.id without committing
     
     # Create bartender profile
     db_bartender = Bartender(

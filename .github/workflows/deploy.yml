@@ -36,7 +36,7 @@ jobs:
 
       - name: Create deployment archive
         run: |
-          mkdir -p deploy
+          mkdir -p deploy/frontend
           cp -r backend deploy/
           cp -r frontend/.next deploy/frontend-next
           cp frontend/package.json frontend/package-lock.json deploy/frontend/

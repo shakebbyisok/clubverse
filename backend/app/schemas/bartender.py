@@ -8,7 +8,9 @@ class BartenderBase(BaseModel):
 
 
 class BartenderCreate(BartenderBase):
-    user_email: str  # Email of user to add as bartender
+    email: str  # Email for the bartender user
+    password: str  # Password for the bartender user
+    full_name: Optional[str] = None  # Full name of the bartender
 
 
 class BartenderResponse(BartenderBase):
