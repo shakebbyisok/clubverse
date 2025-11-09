@@ -59,8 +59,18 @@ export function QRScannerModal({
         { facingMode: 'environment' }, // Use back camera
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: function(viewfinderWidth, viewfinderHeight) {
+            // Use percentage-based qrbox for better cross-platform compatibility
+            const minEdgePercentage = 0.7 // 70% of the smaller edge
+            const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight)
+            const qrboxSize = Math.floor(minEdgeSize * minEdgePercentage)
+            return {
+              width: qrboxSize,
+              height: qrboxSize
+            }
+          },
           aspectRatio: 1.0,
+          supportedScanTypes: [0, 1], // Support both QR_CODE and BARCODE
         },
         (decodedText) => {
           handleQRCodeScanned(decodedText)
@@ -165,7 +175,9 @@ export function QRScannerModal({
 
           {isScanning && !isProcessing && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="border-2 border-primary rounded-lg w-[250px] h-[250px]">
+              {/* Scanning frame overlay - matches qrbox size (70% of viewfinder) */}
+              <div className="border-2 border-primary rounded-lg w-[70%] max-w-[300px] aspect-square relative">
+                {/* Corner indicators */}
                 <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-primary rounded-tl-lg" />
                 <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-primary rounded-tr-lg" />
                 <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-primary rounded-bl-lg" />
