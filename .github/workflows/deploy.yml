@@ -60,7 +60,8 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           port: ${{ secrets.VM_SSH_PORT || 22 }}
           script: |
-            cd ${{ secrets.VM_DEPLOY_PATH || '/home/${{ secrets.VM_USER }}/clubverse' }}
+            DEPLOY_PATH="${{ secrets.VM_DEPLOY_PATH || '/home/nexlx99/clubverse' }}"
+            cd "$DEPLOY_PATH" || mkdir -p "$DEPLOY_PATH" && cd "$DEPLOY_PATH"
             
             # Extract deployment
             tar -xzf /tmp/deploy.tar.gz -C /tmp/
@@ -72,8 +73,9 @@ jobs:
             
             # Deploy backend
             echo "Deploying backend..."
+            mkdir -p backend
             rm -rf backend/*
-            cp -r /tmp/deploy/backend/* backend/
+            cp -r /tmp/deploy/backend/* backend/ 2>/dev/null || echo "No backend files to copy"
             
             # Deploy frontend
             echo "Deploying frontend..."
@@ -110,16 +112,22 @@ jobs:
             echo "Restarting services..."
             
             # Restart backend (adjust service name as needed)
-            sudo systemctl restart clubverse-backend 2>/dev/null || \
-            sudo systemctl restart uvicorn 2>/dev/null || \
-            pm2 restart clubverse-backend 2>/dev/null || \
-            echo "Backend service restart skipped - please restart manually"
+            if sudo systemctl restart clubverse-backend 2>/dev/null; then
+              echo "Backend service restarted"
+            elif pm2 restart clubverse-backend 2>/dev/null; then
+              echo "Backend restarted via PM2"
+            else
+              echo "⚠️ Backend service not found - please set up systemd service or PM2"
+            fi
             
             # Restart frontend (adjust service name as needed)
-            sudo systemctl restart clubverse-frontend 2>/dev/null || \
-            sudo systemctl restart nextjs 2>/dev/null || \
-            pm2 restart clubverse-frontend 2>/dev/null || \
-            echo "Frontend service restart skipped - please restart manually"
+            if sudo systemctl restart clubverse-frontend 2>/dev/null; then
+              echo "Frontend service restarted"
+            elif pm2 restart clubverse-frontend 2>/dev/null; then
+              echo "Frontend restarted via PM2"
+            else
+              echo "⚠️ Frontend service not found - please set up systemd service or PM2"
+            fi
             
             # Restart nginx
             sudo systemctl restart nginx 2>/dev/null || echo "Nginx restart skipped"
