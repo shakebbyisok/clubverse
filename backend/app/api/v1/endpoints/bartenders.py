@@ -54,7 +54,7 @@ def add_bartender(
     # Check if bartender already exists for this club
     existing_bartender = db.query(Bartender).filter(
         Bartender.user_id == user.id,
-        Bartender.club_id == bartender_data.club_id
+        Bartender.club_id == club_uuid
     ).first()
     
     if existing_bartender:

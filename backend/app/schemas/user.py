@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional
+from pydantic import BaseModel, EmailStr, model_validator, field_validator
+from typing import Optional, Any
 from datetime import datetime
+from uuid import UUID
 from app.models.user import UserRole
 
 
@@ -26,6 +27,18 @@ class UserResponse(UserBase):
     is_active: bool
     created_at: datetime
 
+    @model_validator(mode='before')
+    @classmethod
+    def convert_uuid_fields(cls, data: Any) -> Any:
+        # Handle SQLAlchemy model instance
+        if hasattr(data, 'id') and isinstance(data.id, UUID):
+            data.id = str(data.id)
+        # Handle dict
+        elif isinstance(data, dict) and 'id' in data:
+            if isinstance(data['id'], UUID):
+                data['id'] = str(data['id'])
+        return data
+
     class Config:
         from_attributes = True
 
@@ -35,3 +48,6 @@ class Token(BaseModel):
     token_type: str = "bearer"
     user: UserResponse
 
+
+class User(UserResponse):
+    pass

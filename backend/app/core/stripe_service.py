@@ -1,12 +1,17 @@
 import stripe
 from app.core.config import settings
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-def create_payment_intent(amount: int, currency: str = "usd", metadata: Dict[str, Any] = None) -> stripe.PaymentIntent:
-    """Create a Stripe Payment Intent."""
+def create_payment_intent(
+    amount: int,
+    currency: str = "usd",
+    metadata: Dict[str, Any] = None,
+    stripe_account_id: Optional[str] = None
+) -> stripe.PaymentIntent:
+    """Create a Stripe Payment Intent with optional Connect passthrough."""
     intent_data = {
         "amount": amount,
         "currency": currency,
@@ -17,7 +22,16 @@ def create_payment_intent(amount: int, currency: str = "usd", metadata: Dict[str
     # Enable Apple Pay and Google Pay if available
     intent_data["payment_method_types"].extend(["apple_pay", "google_pay"])
     
-    payment_intent = stripe.PaymentIntent.create(**intent_data)
+    # If Connect account provided, route payment to that account using direct charges
+    if stripe_account_id:
+        # Use direct charges - payment goes directly to connected account
+        payment_intent = stripe.PaymentIntent.create(
+            **intent_data,
+            stripe_account=stripe_account_id
+        )
+    else:
+        payment_intent = stripe.PaymentIntent.create(**intent_data)
+    
     return payment_intent
 
 

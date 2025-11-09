@@ -1,20 +1,48 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from app.core.config import settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import hashlib
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        password_bytes = plain_password.encode('utf-8', errors='replace')
+    except Exception:
+        return False
+    
+    # Always pre-hash with SHA256 (since we always store pre-hashed passwords)
+    pre_hashed = hashlib.sha256(password_bytes).hexdigest()
+    
+    # Verify using bcrypt directly
+    try:
+        if isinstance(hashed_password, str):
+            hashed_password_bytes = hashed_password.encode('utf-8')
+        else:
+            hashed_password_bytes = hashed_password
+        
+        return bcrypt.checkpw(pre_hashed.encode('utf-8'), hashed_password_bytes)
+    except Exception:
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    """Hash a password."""
-    return pwd_context.hash(password)
+    """Hash a password - always pre-hashes with SHA256 to handle any length."""
+    if not password:
+        raise ValueError("Password cannot be empty")
+    
+    try:
+        password_bytes = password.encode('utf-8', errors='replace')
+    except Exception as e:
+        raise ValueError(f"Invalid password encoding: {e}")
+    
+    # Always pre-hash with SHA256, then hash with bcrypt
+    pre_hashed = hashlib.sha256(password_bytes).hexdigest()
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pre_hashed.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

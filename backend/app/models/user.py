@@ -12,6 +12,7 @@ class UserRole(str, enum.Enum):
     CUSTOMER = "customer"
     CLUB_OWNER = "club_owner"
     BARTENDER = "bartender"
+    ADMIN = "admin"
 
 
 class User(Base):
@@ -24,6 +25,11 @@ class User(Base):
     role = Column(Enum(UserRole), nullable=False, default=UserRole.CUSTOMER)
     full_name = Column(String, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    # Stripe Connect fields
+    stripe_account_id = Column(String, nullable=True, unique=True, index=True)
+    stripe_account_status = Column(String, nullable=True)  # 'pending', 'active', 'restricted'
+    stripe_charges_enabled = Column(Boolean, default=False)
+    stripe_payouts_enabled = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

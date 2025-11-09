@@ -8,6 +8,11 @@ import enum
 from app.db.base import Base
 
 
+class PaymentMethod(str, enum.Enum):
+    CARD = "card"
+    CASH = "cash"
+
+
 class OrderStatus(str, enum.Enum):
     PENDING_PAYMENT = "pending_payment"
     PAID = "paid"
@@ -24,6 +29,7 @@ class Order(Base):
     customer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     club_id = Column(UUID(as_uuid=True), ForeignKey("clubs.id"), nullable=False)
     total_amount = Column(Numeric(10, 2), nullable=False)
+    payment_method = Column(Enum(PaymentMethod), nullable=False, default=PaymentMethod.CARD)
     status = Column(Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING_PAYMENT)
     payment_intent_id = Column(String, nullable=True, unique=True, index=True)
     qr_code = Column(String, unique=True, nullable=True, index=True)  # UUID as string
