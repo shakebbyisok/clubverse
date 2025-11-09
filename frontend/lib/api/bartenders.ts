@@ -1,20 +1,20 @@
 import { apiClient } from './client'
-import { Bartender } from '@/types'
+import { Bartender, BartenderCreate } from '@/types'
 
 export const bartendersApi = {
   /**
-   * Scan QR code and get order
+   * Create a new bartender (club owner only)
    */
-  scanQRCode: async (qrCode: string): Promise<{ order: any }> => {
-    const response = await apiClient.post('/bartenders/scan-qr', { qr_code: qrCode })
+  create: async (data: BartenderCreate): Promise<Bartender> => {
+    const response = await apiClient.post<Bartender>('/bartenders', data)
     return response.data
   },
 
   /**
-   * Get orders for bartender's club
+   * Get all bartenders for a club
    */
-  getClubOrders: async (clubId: string): Promise<any[]> => {
-    const response = await apiClient.get(`/bartenders/clubs/${clubId}/orders`)
+  getByClub: async (clubId: string): Promise<Bartender[]> => {
+    const response = await apiClient.get<Bartender[]>(`/bartenders/club/${clubId}`)
     return response.data
   },
 }

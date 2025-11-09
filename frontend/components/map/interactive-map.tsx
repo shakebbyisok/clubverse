@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useCallback, useState, useEffect } from 'react'
-import { APIProvider, Map, Marker } from '@vis.gl/react-google-maps'
+import { APIProvider, Map, Marker, useMap } from '@vis.gl/react-google-maps'
 import { Club } from '@/types'
 import { CustomClubMarker } from './custom-club-marker'
 import { ClubInfoBadge } from './club-info-badge'
@@ -194,22 +194,43 @@ export function InteractiveMap({
     }
   }, [clubsWithLocation, userLocation])
 
+  // Map load handler component
+  function MapLoadHandler({ 
+    onMapLoad, 
+    userLocation, 
+    clubsWithLocation 
+  }: { 
+    onMapLoad: (map: google.maps.Map) => void
+    userLocation: { lat: number; lng: number } | null
+    clubsWithLocation: Club[]
+  }) {
+    const map = useMap()
+    
+    useEffect(() => {
+      if (map) {
+        onMapLoad(map)
+        
+        // Fit bounds to show all clubs if no user location
+        if (!userLocation && clubsWithLocation.length > 0 && typeof window !== 'undefined' && window.google?.maps) {
+          const bounds = new window.google.maps.LatLngBounds()
+          clubsWithLocation.forEach((club) => {
+            bounds.extend({
+              lat: Number(club.latitude),
+              lng: Number(club.longitude),
+            })
+          })
+          // Fit with minimal padding for faster loading
+          map.fitBounds(bounds, 40)
+        }
+      }
+    }, [map, onMapLoad, userLocation, clubsWithLocation])
+    
+    return null
+  }
+  
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     setMapInstance(map)
-    
-    // Fit bounds to show all clubs if no user location
-    if (!userLocation && clubsWithLocation.length > 0 && typeof window !== 'undefined' && window.google?.maps) {
-      const bounds = new window.google.maps.LatLngBounds()
-      clubsWithLocation.forEach((club) => {
-        bounds.extend({
-          lat: Number(club.latitude),
-          lng: Number(club.longitude),
-        })
-      })
-      // Fit with minimal padding for faster loading
-      map.fitBounds(bounds, { padding: 40 })
-    }
-  }, [userLocation, clubsWithLocation])
+  }, [])
 
   const handleMapIdle = useCallback(() => {
     // Map is fully loaded and idle - hide loading overlay
@@ -264,7 +285,6 @@ export function InteractiveMap({
           streetViewControl={false}
           clickableIcons={false}
           styles={mapStyles}
-          onLoad={handleMapLoad}
           onIdle={handleMapIdle}
           className="w-full h-full"
           restriction={
@@ -280,15 +300,18 @@ export function InteractiveMap({
           minZoom={mapConfig.restriction ? 9 : undefined}
           maxZoom={17}
         >
+          <MapLoadHandler 
+            onMapLoad={handleMapLoad}
+            userLocation={userLocation}
+            clubsWithLocation={clubsWithLocation}
+          />
           {/* User location marker */}
-          {userLocation && isMapLoaded && typeof window !== 'undefined' && (
+          {userLocation && isMapLoaded && typeof window !== 'undefined' && window.google?.maps && (
             <Marker
               position={userLocation}
               icon={{
-                path: window.google?.maps?.SymbolPath?.CIRCLE ?? 
-                      // Fallback: SVG path for a circle (radius 8)
-                      'M 0, 0 m -8, 0 a 8,8 0 1,0 16,0 a 8,8 0 1,0 -16,0',
-                scale: window.google?.maps?.SymbolPath?.CIRCLE ? 8 : 1,
+                path: window.google.maps.SymbolPath.CIRCLE,
+                scale: 8,
                 fillColor: '#06B6D4',
                 fillOpacity: 1,
                 strokeColor: '#ffffff',

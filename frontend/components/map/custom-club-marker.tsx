@@ -159,7 +159,7 @@ export function CustomClubMarker({ club, position, isSelected, onClick }: Custom
         rootRef.current = null
       }
     }
-  }, [map, position.lat, position.lng])
+  }, [map, position.lat, position.lng, club.logo_settings, club.logo_url, club.name, isSelected, onClick])
 
   // Update content when selection changes
   useEffect(() => {

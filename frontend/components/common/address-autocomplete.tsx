@@ -211,8 +211,9 @@ export function AddressAutocomplete({
           }
 
           // Build street address
-          const parts = place.formatted_address.split(',').map(p => p.trim())
-          let streetAddress = parts[0] || place.formatted_address
+          const formattedAddress = place.formatted_address || ''
+          const parts = formattedAddress.split(',').map(p => p.trim())
+          let streetAddress = parts[0] || formattedAddress
           
           // If first part doesn't have number and second part is just a number, include it
           if (parts.length > 1 && !/\d/.test(parts[0]) && /^\d+$/.test(parts[1])) {
@@ -226,7 +227,7 @@ export function AddressAutocomplete({
           const addressData: AddressData = {
             address: streetAddress,
             city: city,
-            formatted_address: place.formatted_address,
+            formatted_address: formattedAddress,
             latitude: place.geometry?.location?.lat() || 0,
             longitude: place.geometry?.location?.lng() || 0,
             place_id: place.place_id,

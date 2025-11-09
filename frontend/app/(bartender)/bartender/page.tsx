@@ -1,12 +1,21 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ShoppingBag, QrCode } from 'lucide-react'
+import { QRScannerModal } from '@/components/common/qr-scanner-modal'
+import { Order } from '@/types'
 
 export default function BartenderDashboardPage() {
   const router = useRouter()
+  const [isScannerOpen, setIsScannerOpen] = useState(false)
+
+  const handleScanSuccess = (order: Order) => {
+    // Navigate to orders page and potentially highlight the scanned order
+    router.push(`/bartender/orders?order=${order.id}`)
+  }
 
   return (
     <div className="space-y-6">
@@ -43,12 +52,23 @@ export default function BartenderDashboardPage() {
             <div className="text-sm text-muted-foreground mb-3">
               Scan customer QR code to process order
             </div>
-            <Button variant="outline" size="sm" className="w-full">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+              onClick={() => setIsScannerOpen(true)}
+            >
               Open Scanner
             </Button>
           </CardContent>
         </Card>
       </div>
+
+      <QRScannerModal
+        open={isScannerOpen}
+        onOpenChange={setIsScannerOpen}
+        onScanSuccess={handleScanSuccess}
+      />
     </div>
   )
 }

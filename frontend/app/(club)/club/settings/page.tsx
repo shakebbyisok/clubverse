@@ -40,22 +40,6 @@ export default function ClubSettingsPage() {
   const [isLoadingStripe, setIsLoadingStripe] = useState(false)
   const [viewMode, setViewMode] = useState<SettingsViewMode>('clubs')
 
-  useEffect(() => {
-    loadClubs()
-    loadStripeStatus()
-    
-    // Check if returning from Stripe onboarding
-    const urlParams = new URLSearchParams(window.location.search)
-    if (urlParams.get('stripe_return') === 'true' || urlParams.get('stripe_refresh') === 'true') {
-      // Reload status after returning from Stripe
-      setTimeout(() => {
-        loadStripeStatus()
-        // Clean up URL
-        window.history.replaceState({}, '', window.location.pathname)
-      }, 1000)
-    }
-  }, [loadClubs, loadStripeStatus])
-
   const loadStripeStatus = useCallback(async () => {
     setIsLoadingStripe(true)
     try {
@@ -67,27 +51,6 @@ export default function ClubSettingsPage() {
       setIsLoadingStripe(false)
     }
   }, [])
-
-  const handleStripeOnboard = async () => {
-    try {
-      const returnUrl = `${window.location.origin}/club/settings?stripe_return=true`
-      const refreshUrl = `${window.location.origin}/club/settings?stripe_refresh=true`
-      
-      const { onboarding_url } = await stripeConnectApi.onboard({
-        return_url: returnUrl,
-        refresh_url: refreshUrl,
-      })
-      
-      // Redirect to Stripe onboarding
-      window.location.href = onboarding_url
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.response?.data?.detail || 'Failed to start Stripe onboarding',
-      })
-    }
-  }
 
   const loadClubs = useCallback(async () => {
     try {
@@ -117,6 +80,43 @@ export default function ClubSettingsPage() {
       setIsLoading(false)
     }
   }, [toast])
+
+  useEffect(() => {
+    loadClubs()
+    loadStripeStatus()
+    
+    // Check if returning from Stripe onboarding
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('stripe_return') === 'true' || urlParams.get('stripe_refresh') === 'true') {
+      // Reload status after returning from Stripe
+      setTimeout(() => {
+        loadStripeStatus()
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname)
+      }, 1000)
+    }
+  }, [loadClubs, loadStripeStatus])
+
+  const handleStripeOnboard = async () => {
+    try {
+      const returnUrl = `${window.location.origin}/club/settings?stripe_return=true`
+      const refreshUrl = `${window.location.origin}/club/settings?stripe_refresh=true`
+      
+      const { onboarding_url } = await stripeConnectApi.onboard({
+        return_url: returnUrl,
+        refresh_url: refreshUrl,
+      })
+      
+      // Redirect to Stripe onboarding
+      window.location.href = onboarding_url
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.response?.data?.detail || 'Failed to start Stripe onboarding',
+      })
+    }
+  }
 
   const handleCreate = () => {
     setEditingClub(null)
@@ -313,7 +313,7 @@ export default function ClubSettingsPage() {
   return (
     <div className="space-y-6">
       {/* Header with Tabs */}
-      <div className="flex items-center justify-between border-b border-border/40">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
           {settingsTabs.map((tab) => {
             const Icon = tab.icon
@@ -363,59 +363,73 @@ export default function ClubSettingsPage() {
       {viewMode === 'payments' && (
         <div className="space-y-4">
           <Card className="border-border/40 bg-card/50 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <CreditCard className="h-4 w-4" />
-                Payment Processing
-              </CardTitle>
-              <CardDescription>
-                Connect your Stripe account to accept payments for orders
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="p-6">
               {isLoadingStripe ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading status...
                 </div>
               ) : stripeStatus?.stripe_account_status === 'active' ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      <span className="text-sm font-medium">Stripe account connected</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    {/* Stripe Logo */}
+                    <img 
+                      src="/assets/stripelogo.png" 
+                      alt="Stripe" 
+                      className="h-5 w-auto"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold">Stripe Connected</span>
+                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">Ready to accept payments</p>
                     </div>
-                    <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
-                      Active
-                    </span>
                   </div>
-                  <div className="pt-2 border-t border-border/40">
-                    <p className="text-xs text-muted-foreground">
-                      Your Stripe account is active and ready to accept payments. All orders will be processed through your connected account.
-                    </p>
-                  </div>
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 font-medium">
+                    Active
+                  </span>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <AlertCircle className="h-4 w-4" />
-                    <span>
-                      {stripeStatus?.stripe_account_status === 'pending'
-                        ? 'Stripe account setup in progress'
-                        : 'No Stripe account connected'}
-                    </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    {/* Stripe Logo */}
+                    <img 
+                      src="/assets/stripelogo.png" 
+                      alt="Stripe" 
+                      className="h-5 w-auto"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold">Payment Processing</span>
+                        {stripeStatus?.stripe_account_status === 'pending' && (
+                          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {stripeStatus?.stripe_account_status === 'pending'
+                          ? 'Setup in progress'
+                          : 'Connect Stripe to accept payments'}
+                      </p>
+                    </div>
                   </div>
-                  <Button onClick={handleStripeOnboard} className="w-full gap-2">
-                    <CreditCard className="h-4 w-4" />
-                    {stripeStatus?.stripe_account_status === 'pending'
-                      ? 'Complete Stripe Setup'
-                      : 'Connect Stripe Account'}
+                  <Button 
+                    onClick={handleStripeOnboard} 
+                    size="sm"
+                    className="gap-2 bg-[#635BFF] hover:bg-[#5851EA] text-white"
+                  >
+                    {stripeStatus?.stripe_account_status === 'pending' ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Complete Setup
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-3.5 w-3.5" />
+                        Connect
+                      </>
+                    )}
                   </Button>
-                  <div className="pt-2 border-t border-border/40">
-                    <p className="text-xs text-muted-foreground">
-                      Connect your Stripe account to start accepting payments. You&apos;ll be redirected to Stripe to complete the setup process.
-                    </p>
-                  </div>
                 </div>
               )}
             </CardContent>
