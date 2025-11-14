@@ -116,7 +116,7 @@ jobs:
             cd frontend
             
             # Create .env.production file
-            echo "NEXT_PUBLIC_BACKEND_URL=http://api.clubverse.es" > .env.production
+            echo "NEXT_PUBLIC_BACKEND_URL=https://api.clubverse.es" > .env.production
             echo "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSyCyGTyq6vn96nDg-vP7lYecLJOSvZYf1ag" >> .env.production
             
             # Verify file was created
@@ -155,18 +155,65 @@ jobs:
             
             # Restart backend (adjust service name as needed)
             if sudo systemctl restart clubverse-backend 2>/dev/null; then
-              echo "Backend service restarted"
+              echo "Backend service restart command executed"
+              sleep 2
+              if sudo systemctl is-active --quiet clubverse-backend; then
+                echo "✅ Backend service is running"
+              else
+                echo "⚠️ Backend service restart failed - checking logs..."
+                sudo journalctl -u clubverse-backend -n 20 --no-pager || true
+              fi
             elif pm2 restart clubverse-backend 2>/dev/null; then
-              echo "Backend restarted via PM2"
+              echo "✅ Backend restarted via PM2"
             else
               echo "⚠️ Backend service not found - please set up systemd service or PM2"
             fi
             
-            # Restart frontend (adjust service name as needed)
+            # Restart frontend with verification
+            echo "Restarting frontend service..."
             if sudo systemctl restart clubverse-frontend 2>/dev/null; then
-              echo "Frontend service restarted"
+              echo "Frontend service restart command executed"
+              # Wait for service to start
+              sleep 3
+              # Verify service is active
+              if sudo systemctl is-active --quiet clubverse-frontend; then
+                echo "✅ Frontend service is active"
+                # Wait a bit more for Next.js to fully start
+                sleep 5
+                # Verify Next.js is actually listening on port 3000
+                MAX_RETRIES=10
+                RETRY_COUNT=0
+                while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                  if curl -f http://localhost:3000 > /dev/null 2>&1; then
+                    echo "✅ Next.js server is responding on port 3000"
+                    break
+                  fi
+                  RETRY_COUNT=$((RETRY_COUNT + 1))
+                  echo "Waiting for Next.js to start... ($RETRY_COUNT/$MAX_RETRIES)"
+                  sleep 2
+                done
+                if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+                  echo "⚠️ Frontend service is active but Next.js is not responding"
+                  echo "Checking service logs..."
+                  sudo journalctl -u clubverse-frontend -n 30 --no-pager || true
+                  echo "Checking if port 3000 is listening..."
+                  sudo netstat -tlnp | grep 3000 || echo "Port 3000 is not listening"
+                fi
+              else
+                echo "❌ Frontend service failed to start - checking logs..."
+                sudo journalctl -u clubverse-frontend -n 30 --no-pager || true
+                echo "Attempting to check service status..."
+                sudo systemctl status clubverse-frontend --no-pager -l || true
+              fi
             elif pm2 restart clubverse-frontend 2>/dev/null; then
               echo "Frontend restarted via PM2"
+              sleep 5
+              if curl -f http://localhost:3000 > /dev/null 2>&1; then
+                echo "✅ Next.js server is responding on port 3000"
+              else
+                echo "⚠️ PM2 restarted but Next.js is not responding"
+                pm2 logs clubverse-frontend --lines 20 --nostream || true
+              fi
             else
               echo "⚠️ Frontend service not found - starting Next.js server directly..."
               cd frontend
