@@ -3,7 +3,7 @@ name: Deploy Clubverse to GCP VM
 on:
   push:
     branches:
-      - lapreviademo
+      - main  # Only deploy from main, lapreviademo uses deploy.yml
   workflow_dispatch:  # Allow manual triggers
 
 jobs:
