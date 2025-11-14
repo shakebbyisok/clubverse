@@ -2,14 +2,19 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, User } from 'lucide-react'
+import { List, User, Map } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   {
-    label: 'Clubverse',
+    label: 'Club',
+    href: '/nearest-club',
+    icon: 'svg', // Special marker for SVG icon (club logo)
+  },
+  {
+    label: 'Map',
     href: '/map',
-    icon: 'svg', // Special marker for SVG icon
+    icon: Map,
   },
   {
     label: 'Clubs',
@@ -47,10 +52,10 @@ export function MobileBottomNav() {
             >
               {item.icon === 'svg' ? (
                 <img
-                  src="/assets/whiteicon.svg"
-                  alt="Clubverse"
+                  src="/assets/previa/whiteprevia.svg"
+                  alt="La Previa"
                   className={cn(
-                    'h-5 w-auto dark:invert-0 invert',
+                    'h-8 w-auto dark:invert-0 invert',
                     isActive && 'scale-110'
                   )}
                 />

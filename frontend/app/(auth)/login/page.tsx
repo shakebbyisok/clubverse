@@ -30,8 +30,8 @@ export default function LoginPage() {
       {/* MOBILE: Icon in top-left corner */}
       <div className="md:hidden fixed left-4 top-4 z-40">
         <img 
-          src="/assets/whiteicon.svg" 
-          alt="Clubverse" 
+          src="/assets/previa/whiteprevia.svg" 
+          alt="La Previa" 
           className="h-10 w-auto dark:invert-0 invert"
         />
       </div>
@@ -49,7 +49,7 @@ export default function LoginPage() {
         <CardHeader className="space-y-1 pb-6">
           <CardTitle className="text-2xl font-bold text-center">Welcome Back</CardTitle>
           <CardDescription className="text-center">
-            Sign in to your Clubverse account
+            Sign in to your La Previa account
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -104,11 +104,11 @@ export default function LoginPage() {
         </CardContent>
         </Card>
         
-        {/* MOBILE: Clubverse text below form */}
+        {/* MOBILE: La Previa text below form */}
         <div className="md:hidden mt-8">
           <img 
-            src="/assets/whiteclubverse.svg" 
-            alt="Clubverse" 
+            src="/assets/previa/whiteprevia.svg" 
+            alt="La Previa" 
             className="h-12 w-auto mx-auto dark:invert-0 invert"
           />
         </div>

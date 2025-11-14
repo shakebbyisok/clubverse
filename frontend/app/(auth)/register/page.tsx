@@ -65,8 +65,8 @@ export default function RegisterPage() {
       {/* MOBILE: Icon in top-left corner */}
       <div className="md:hidden fixed left-4 top-4 z-40">
         <img 
-          src="/assets/whiteicon.svg" 
-          alt="Clubverse" 
+          src="/assets/previa/whiteprevia.svg" 
+          alt="La Previa" 
           className="h-10 w-auto dark:invert-0 invert"
         />
       </div>
@@ -82,7 +82,7 @@ export default function RegisterPage() {
       <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 bg-background">
         <Card className="w-full max-w-md border border-border shadow-sm">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Join Clubverse</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">Join La Previa</CardTitle>
           <CardDescription className="text-center">
             Create your account to start ordering
           </CardDescription>
@@ -171,11 +171,11 @@ export default function RegisterPage() {
         </CardContent>
         </Card>
         
-        {/* MOBILE: Clubverse text below form */}
+        {/* MOBILE: La Previa text below form */}
         <div className="md:hidden mt-8">
           <img 
-            src="/assets/whiteclubverse.svg" 
-            alt="Clubverse" 
+            src="/assets/previa/whiteprevia.svg" 
+            alt="La Previa" 
             className="h-12 w-auto mx-auto dark:invert-0 invert"
           />
         </div>

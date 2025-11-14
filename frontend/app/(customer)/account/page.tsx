@@ -91,8 +91,8 @@ export default function AccountPage() {
 
         {/* App Info - Minimalist */}
         <div className="text-center text-xs text-muted-foreground/60 pt-2 space-y-0.5">
-          <p>Clubverse v1.0.0</p>
-          <p>© 2025 Clubverse. All rights reserved.</p>
+          <p>La Previa v1.0.0</p>
+          <p>© 2025 La Previa. All rights reserved.</p>
         </div>
       </div>
     </div>

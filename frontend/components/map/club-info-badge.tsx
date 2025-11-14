@@ -3,7 +3,7 @@
 import { Club } from '@/types'
 import { Button } from '@/components/ui/button'
 import { ClubLogo } from '@/components/common/club-logo'
-import { X, MapPin, Navigation } from 'lucide-react'
+import { X, MapPin, Navigation, Route } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMemo } from 'react'
 
@@ -12,6 +12,7 @@ interface ClubInfoBadgeProps {
   userLocation: { lat: number; lng: number } | null
   onClose: () => void
   onViewMenu: (clubId: string) => void
+  onShowDirections?: (club: Club) => void
   className?: string
 }
 
@@ -20,6 +21,7 @@ export function ClubInfoBadge({
   userLocation,
   onClose,
   onViewMenu,
+  onShowDirections,
   className,
 }: ClubInfoBadgeProps) {
   // Calculate distance if we have user location
@@ -91,14 +93,27 @@ export function ClubInfoBadge({
         </Button>
       </div>
 
-      {/* Action Button */}
-      <Button
-        onClick={() => onViewMenu(club.id)}
-        className="w-full h-8"
-        size="sm"
-      >
-        View Menu
-      </Button>
+      {/* Action Buttons */}
+      <div className="flex gap-2">
+        {userLocation && onShowDirections && (
+          <Button
+            onClick={() => onShowDirections(club)}
+            variant="outline"
+            className="flex-1 h-8 text-xs"
+            size="sm"
+          >
+            <Route className="h-3.5 w-3.5 mr-1.5" />
+            How to Arrive
+          </Button>
+        )}
+        <Button
+          onClick={() => onViewMenu(club.id)}
+          className="flex-1 h-8"
+          size="sm"
+        >
+          View Menu
+        </Button>
+      </div>
     </div>
   )
 }

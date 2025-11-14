@@ -231,6 +231,19 @@ export interface BartenderCreate {
   full_name?: string
 }
 
+// UserClub types
+export interface UserClub {
+  id: string
+  user_id: string
+  club_id: string
+  points: number
+  total_orders: number
+  total_spent: number
+  joined_at: string
+  updated_at?: string
+  club: Club
+}
+
 // API Error types
 export interface ApiError {
   detail?: string

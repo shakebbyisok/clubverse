@@ -10,12 +10,12 @@ import { Toaster } from '@/components/ui/toaster'
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 
 export const metadata: Metadata = {
-  title: 'Clubverse - Nightlife Drink Ordering',
+  title: 'La Previa - Nightlife Drink Ordering',
   description: 'Order drinks at your favorite clubs instantly',
   icons: {
-    icon: '/assets/whiteicon.svg',
-    shortcut: '/assets/whiteicon.svg',
-    apple: '/assets/whiteicon.svg',
+    icon: '/assets/previa/whiteprevia.svg',
+    shortcut: '/assets/previa/whiteprevia.svg',
+    apple: '/assets/previa/whiteprevia.svg',
   },
 }
 

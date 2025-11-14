@@ -3,7 +3,7 @@
  * 
  * To change the accent color:
  * 1. Choose a preset from below
- * 2. Update CLUBVERSE_BRAND.accent in tokens.ts
+ * 2. Update LA_PREVIA_BRAND.accent in tokens.ts
  * 3. Update --primary and --ring in globals.css
  * 
  * Format: HSL values for Tailwind CSS variables
@@ -111,7 +111,7 @@ export function getCurrentAccentColor() {
  * 
  * 1. Update CURRENT_ACCENT above to your chosen preset
  * 2. Update lib/design-system/tokens.ts:
- *    - CLUBVERSE_BRAND.accent = accentColorPresets[CURRENT_ACCENT].hex
+ *    - LA_PREVIA_BRAND.accent = accentColorPresets[CURRENT_ACCENT].hex
  * 
  * 3. Update app/globals.css:
  *    - :root { --primary: [HSL value]; --ring: [HSL value]; }

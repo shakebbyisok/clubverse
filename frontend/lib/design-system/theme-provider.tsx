@@ -58,20 +58,20 @@ export function ThemeProvider({
 
   // Load theme from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem('clubverse-theme') as Theme | null
+    const stored = localStorage.getItem('laprevia-theme') as Theme | null
     if (stored) {
       setTheme(stored)
     } else {
       // Set default to dark
       setTheme('dark')
-      localStorage.setItem('clubverse-theme', 'dark')
+      localStorage.setItem('laprevia-theme', 'dark')
     }
   }, [])
 
   // Save theme to localStorage
   const handleSetTheme = (newTheme: Theme) => {
     setTheme(newTheme)
-    localStorage.setItem('clubverse-theme', newTheme)
+    localStorage.setItem('laprevia-theme', newTheme)
   }
 
   return (

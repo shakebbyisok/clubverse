@@ -4,12 +4,14 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.v1.router import api_router
 from app.db.base import Base, engine
+# Import all models to ensure they're registered with SQLAlchemy
+from app.models import User, Club, Drink, DrinkList, Order, OrderItem, Bartender, UserClub
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="Clubverse API",
+    title="La Previa API",
     description="Nightlife drink ordering platform API",
     version="1.0.0",
 )
@@ -36,7 +38,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 @app.get("/")
 def root():
-    return {"message": "Clubverse API", "version": "1.0.0"}
+    return {"message": "La Previa API", "version": "1.0.0"}
 
 
 @app.get("/health")

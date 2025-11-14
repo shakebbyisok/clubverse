@@ -1,9 +1,9 @@
 /**
- * Clubverse Design Tokens
+ * La Previa Design Tokens
  * Single source of truth for colors, typography, spacing, etc.
  */
 
-// Clubverse brand colors (nightlife theme - vibrant, energetic)
+// La Previa brand colors (nightlife theme - vibrant, energetic)
 export const CLUBVERSE_BRAND = {
   purple: '#8B5CF6',  // Vibrant purple (nightlife energy)
   pink: '#EC4899',    // Hot pink (party vibe)

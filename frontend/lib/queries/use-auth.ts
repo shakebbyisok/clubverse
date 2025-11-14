@@ -56,7 +56,7 @@ export function useRegister() {
       login(response.access_token, response.user)
       toast({
         title: 'Account created!',
-        description: 'Welcome to Clubverse!',
+        description: 'Welcome to La Previa!',
       })
       // Redirect based on user role
       router.push(getDashboardRoute(response.user.role))

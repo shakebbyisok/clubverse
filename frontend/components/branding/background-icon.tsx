@@ -7,7 +7,7 @@ export function BackgroundIcon({ className = '' }: { className?: string }) {
 
   return (
     <img 
-      src={actualTheme === 'dark' ? '/assets/whiteicon.svg' : '/assets/blackicon.svg'}
+      src={actualTheme === 'dark' ? '/assets/previa/whiteprevia.svg' : '/assets/previa/blackprevia.svg'}
       alt="" 
       className={className}
     />

@@ -89,14 +89,9 @@ export function DashboardLayout({
           {/* Logo/Brand */}
           <div className="h-12 flex items-center justify-center px-3 border-b border-border/40 gap-2">
             <img 
-              src="/assets/whiteclubverse.svg" 
-              alt="Clubverse" 
-              className="h-6 w-auto dark:invert-0 invert"
-            />
-            <img 
-              src="/assets/whiteicon.svg" 
-              alt="Clubverse" 
-              className="h-7 w-auto dark:invert-0 invert"
+              src="/assets/previa/whiteprevia.svg" 
+              alt="La Previa" 
+              className="h-10 w-auto dark:invert-0 invert"
             />
           </div>
 
@@ -169,14 +164,9 @@ export function DashboardLayout({
           <aside className="fixed inset-y-0 left-0 w-48 bg-card border-r border-border/40 flex flex-col">
             <div className="h-12 flex items-center justify-center px-3 border-b border-border/40 gap-2 relative">
               <img 
-                src="/assets/whiteclubverse.svg" 
-                alt="Clubverse" 
-                className="h-6 w-auto dark:invert-0 invert"
-              />
-              <img 
-                src="/assets/whiteicon.svg" 
-                alt="Clubverse" 
-                className="h-7 w-auto dark:invert-0 invert"
+                src="/assets/previa/whiteprevia.svg" 
+                alt="La Previa" 
+                className="h-10 w-auto dark:invert-0 invert"
               />
               <button onClick={() => setSidebarOpen(false)} className="absolute top-2 right-2 p-1.5">
                 <X className="h-4 w-4" />

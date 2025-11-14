@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useCallback, useState, useEffect } from 'react'
+import { useMemo, useCallback, useState, useEffect, useRef } from 'react'
 import { APIProvider, Map, Marker, useMap } from '@vis.gl/react-google-maps'
 import { Club } from '@/types'
 import { CustomClubMarker } from './custom-club-marker'
@@ -111,17 +111,53 @@ export function InteractiveMap({
 }: InteractiveMapProps) {
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
+  const [directionsRenderer, setDirectionsRenderer] = useState<google.maps.DirectionsRenderer | null>(null)
+  const [showingDirections, setShowingDirections] = useState(false)
+  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null)
 
-  // Center map on selected club
+  // Initialize Directions Service
   useEffect(() => {
-    if (selectedClub && selectedClub.latitude && selectedClub.longitude && mapInstance) {
+    if (typeof window !== 'undefined' && window.google?.maps && !directionsServiceRef.current) {
+      directionsServiceRef.current = new window.google.maps.DirectionsService()
+    }
+  }, [])
+
+  // Initialize Directions Renderer with minimalist styling
+  useEffect(() => {
+    if (mapInstance && typeof window !== 'undefined' && window.google?.maps && !directionsRenderer) {
+      const renderer = new window.google.maps.DirectionsRenderer({
+        map: mapInstance,
+        suppressMarkers: true, // Hide default markers
+        preserveViewport: false, // Allow map to adjust to show route
+        polylineOptions: {
+          strokeColor: '#8B5CF6', // Primary color
+          strokeWeight: 4,
+          strokeOpacity: 0.8,
+          zIndex: 1,
+        },
+      })
+      setDirectionsRenderer(renderer)
+    }
+  }, [mapInstance, directionsRenderer])
+
+  // Clear directions when club is deselected
+  useEffect(() => {
+    if (!selectedClub && directionsRenderer) {
+      directionsRenderer.setDirections({ routes: [] })
+      setShowingDirections(false)
+    }
+  }, [selectedClub, directionsRenderer])
+
+  // Center map on selected club (only if not showing directions)
+  useEffect(() => {
+    if (selectedClub && selectedClub.latitude && selectedClub.longitude && mapInstance && !showingDirections) {
       mapInstance.panTo({
         lat: Number(selectedClub.latitude),
         lng: Number(selectedClub.longitude),
       })
       mapInstance.setZoom(15)
     }
-  }, [selectedClub, mapInstance])
+  }, [selectedClub, mapInstance, showingDirections])
 
   // Filter clubs with valid coordinates
   const clubsWithLocation = useMemo(
@@ -173,9 +209,9 @@ export function InteractiveMap({
     const lngDiff = maxLng - minLng
     const maxDiff = Math.max(latDiff, lngDiff)
 
-    // Add padding (minimum 0.01 degrees to ensure valid bounds)
-    const latPadding = Math.max((maxLat - minLat) * 0.1, 0.01)
-    const lngPadding = Math.max((maxLng - minLng) * 0.1, 0.01)
+    // Add massive padding to allow extensive panning (50x larger, minimum 5 degrees = ~550km)
+    const latPadding = Math.max((maxLat - minLat) * 50, 5.0) // Very large padding - allows panning far away
+    const lngPadding = Math.max((maxLng - minLng) * 50, 5.0) // Very large padding - allows panning far away
 
     const bounds = {
       north: maxLat + latPadding,
@@ -261,6 +297,51 @@ export function InteractiveMap({
     }
   }, [userLocation, mapInstance, onUserLocationRequest])
 
+  const handleShowDirections = useCallback((club: Club) => {
+    if (!userLocation || !club.latitude || !club.longitude || !directionsRenderer || !directionsServiceRef.current || !mapInstance) {
+      return
+    }
+
+    // Toggle directions if already showing for this club
+    if (showingDirections && selectedClub?.id === club.id) {
+      directionsRenderer.setDirections({ routes: [] })
+      setShowingDirections(false)
+      // Recenter on club
+      mapInstance.panTo({
+        lat: Number(club.latitude),
+        lng: Number(club.longitude),
+      })
+      mapInstance.setZoom(15)
+      return
+    }
+
+    const origin = userLocation
+    const destination = {
+      lat: Number(club.latitude),
+      lng: Number(club.longitude),
+    }
+
+    directionsServiceRef.current.route(
+      {
+        origin,
+        destination,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === window.google.maps.DirectionsStatus.OK && result) {
+          directionsRenderer.setDirections(result)
+          setShowingDirections(true)
+          
+          // Adjust map bounds to show entire route
+          const bounds = result.routes[0].bounds
+          mapInstance.fitBounds(bounds, {
+            padding: 60, // Add padding around route
+          })
+        }
+      }
+    )
+  }, [userLocation, directionsRenderer, mapInstance, showingDirections, selectedClub])
+
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   if (!apiKey) {
@@ -306,7 +387,7 @@ export function InteractiveMap({
             mapConfig.restriction
               ? {
                   latLngBounds: mapConfig.restriction,
-                  strictBounds: false,
+                  strictBounds: false, // Allow panning outside bounds
                 }
               : undefined
           }
@@ -362,6 +443,7 @@ export function InteractiveMap({
               userLocation={userLocation}
               onClose={() => onClubSelect(null)}
               onViewMenu={onViewMenu}
+              onShowDirections={handleShowDirections}
             />
           </div>
         )}

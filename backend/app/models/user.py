@@ -37,4 +37,5 @@ class User(Base):
     owned_clubs = relationship("Club", back_populates="owner", foreign_keys="Club.owner_id")
     orders = relationship("Order", back_populates="customer")
     bartender_profiles = relationship("Bartender", back_populates="user")
+    user_clubs = relationship("UserClub", back_populates="user", cascade="all, delete-orphan")
 

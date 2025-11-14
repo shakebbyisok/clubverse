@@ -9,7 +9,7 @@ export default function TestPage() {
       <div>
         <h2 className="text-lg font-bold mb-4">Test 1: White SVG (Direct)</h2>
         <div className="bg-black p-8">
-          <img src="/assets/whiteicon.svg" alt="white" className="w-48 h-auto" />
+          <img src="/assets/previa/whiteprevia.svg" alt="white" className="w-48 h-auto" />
         </div>
       </div>
 
@@ -17,7 +17,7 @@ export default function TestPage() {
       <div>
         <h2 className="text-lg font-bold mb-4">Test 2: Black SVG (Direct)</h2>
         <div className="bg-white p-8 border">
-          <img src="/assets/blackicon.svg" alt="black" className="w-48 h-auto" />
+          <img src="/assets/previa/blackprevia.svg" alt="black" className="w-48 h-auto" />
         </div>
       </div>
 
@@ -25,7 +25,7 @@ export default function TestPage() {
       <div>
         <h2 className="text-lg font-bold mb-4">Test 3: White SVG with Opacity</h2>
         <div className="bg-black p-8">
-          <img src="/assets/whiteicon.svg" alt="white" className="w-48 h-auto opacity-[0.3]" />
+          <img src="/assets/previa/whiteprevia.svg" alt="white" className="w-48 h-auto opacity-[0.3]" />
         </div>
       </div>
 
@@ -33,7 +33,7 @@ export default function TestPage() {
       <div>
         <h2 className="text-lg font-bold mb-4">Test 4: Black SVG with Opacity</h2>
         <div className="bg-white p-8 border">
-          <img src="/assets/blackicon.svg" alt="black" className="w-48 h-auto opacity-[0.3]" />
+          <img src="/assets/previa/blackprevia.svg" alt="black" className="w-48 h-auto opacity-[0.3]" />
         </div>
       </div>
 
