@@ -143,7 +143,7 @@ export function InteractiveMap({
   // Clear directions when club is deselected
   useEffect(() => {
     if (!selectedClub && directionsRenderer) {
-      directionsRenderer.setDirections({ routes: [] })
+      directionsRenderer.setMap(null)
       setShowingDirections(false)
     }
   }, [selectedClub, directionsRenderer])
@@ -304,7 +304,7 @@ export function InteractiveMap({
 
     // Toggle directions if already showing for this club
     if (showingDirections && selectedClub?.id === club.id) {
-      directionsRenderer.setDirections({ routes: [] })
+      directionsRenderer.setMap(null)
       setShowingDirections(false)
       // Recenter on club
       mapInstance.panTo({
@@ -313,6 +313,11 @@ export function InteractiveMap({
       })
       mapInstance.setZoom(15)
       return
+    }
+    
+    // Re-attach renderer to map if it was detached
+    if (directionsRenderer.getMap() === null) {
+      directionsRenderer.setMap(mapInstance)
     }
 
     const origin = userLocation
@@ -334,9 +339,7 @@ export function InteractiveMap({
           
           // Adjust map bounds to show entire route
           const bounds = result.routes[0].bounds
-          mapInstance.fitBounds(bounds, {
-            padding: 60, // Add padding around route
-          })
+          mapInstance.fitBounds(bounds, 60) // Add padding around route (60px)
         }
       }
     )

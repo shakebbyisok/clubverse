@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { List, User, Map } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -50,16 +51,19 @@ export function MobileBottomNav() {
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              {item.icon === 'svg' ? (
-                <img
-                  src="/assets/previa/whiteprevia.svg"
-                  alt="La Previa"
-                  className={cn(
-                    'h-8 w-auto dark:invert-0 invert',
-                    isActive && 'scale-110'
-                  )}
-                />
-              ) : (
+                  {item.icon === 'svg' ? (
+                    <Image
+                      src="/assets/previa/whiteprevia.svg"
+                      alt="La Previa"
+                      width={32}
+                      height={32}
+                      className={cn(
+                        'h-8 w-auto dark:invert-0 invert',
+                        isActive && 'scale-110'
+                      )}
+                      unoptimized
+                    />
+                  ) : (
                 Icon && <Icon className={cn('h-5 w-5', isActive && 'scale-110')} />
               )}
               <span className="text-[11px] font-medium">{item.label}</span>

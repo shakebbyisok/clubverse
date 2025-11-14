@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useState } from 'react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -88,10 +89,13 @@ export function DashboardLayout({
         <div className="flex-1 flex flex-col">
           {/* Logo/Brand */}
           <div className="h-12 flex items-center justify-center px-3 border-b border-border/40 gap-2">
-            <img 
+            <Image 
               src="/assets/previa/whiteprevia.svg" 
               alt="La Previa" 
+              width={40}
+              height={40}
               className="h-10 w-auto dark:invert-0 invert"
+              unoptimized
             />
           </div>
 
@@ -163,10 +167,13 @@ export function DashboardLayout({
           <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
           <aside className="fixed inset-y-0 left-0 w-48 bg-card border-r border-border/40 flex flex-col">
             <div className="h-12 flex items-center justify-center px-3 border-b border-border/40 gap-2 relative">
-              <img 
+              <Image 
                 src="/assets/previa/whiteprevia.svg" 
                 alt="La Previa" 
+                width={40}
+                height={40}
                 className="h-10 w-auto dark:invert-0 invert"
+                unoptimized
               />
               <button onClick={() => setSidebarOpen(false)} className="absolute top-2 right-2 p-1.5">
                 <X className="h-4 w-4" />

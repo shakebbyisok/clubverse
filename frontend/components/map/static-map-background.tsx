@@ -56,6 +56,14 @@ interface StaticMapBackgroundProps {
 export function StaticMapBackground({ club, className }: StaticMapBackgroundProps) {
   const [isLoaded, setIsLoaded] = useState(false)
 
+  useEffect(() => {
+    // Set loaded after a short delay to ensure map is rendered
+    const timer = setTimeout(() => {
+      setIsLoaded(true)
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [])
+
   if (!club.latitude || !club.longitude) {
     return null
   }
@@ -82,7 +90,6 @@ export function StaticMapBackground({ club, className }: StaticMapBackgroundProp
           className="w-full h-full"
           draggable={false}
           scrollwheel={false}
-          onLoad={() => setIsLoaded(true)}
         >
           {isLoaded && typeof window !== 'undefined' && window.google?.maps && (
             <Marker

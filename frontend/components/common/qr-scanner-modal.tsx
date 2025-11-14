@@ -61,6 +61,7 @@ export function QRScannerModal({
       disableBrightnessAndWakeLock()
       stopScanner()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const enableBrightnessAndWakeLock = async () => {
