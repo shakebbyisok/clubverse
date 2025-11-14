@@ -120,7 +120,21 @@ jobs:
             elif pm2 restart clubverse-frontend 2>/dev/null; then
               echo "Frontend restarted via PM2"
             else
-              echo "⚠️ Frontend service not found - please set up systemd service or PM2"
+              echo "⚠️ Frontend service not found - starting Next.js server directly..."
+              cd frontend
+              # Kill any existing Next.js processes on port 3000
+              lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+              # Start Next.js in background
+              nohup npm start > /tmp/nextjs.log 2>&1 &
+              echo $! > /tmp/nextjs.pid
+              sleep 3
+              # Verify it's running
+              if curl -f http://localhost:3000 > /dev/null 2>&1; then
+                echo "✅ Next.js server started successfully"
+              else
+                echo "❌ Failed to start Next.js server - check /tmp/nextjs.log"
+              fi
+              cd ..
             fi
             
             # Restart nginx
