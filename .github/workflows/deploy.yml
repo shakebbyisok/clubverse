@@ -70,6 +70,24 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           port: ${{ secrets.VM_SSH_PORT || 22 }}
           script: |
+            # Ensure GitHub Actions SSH key persists (prevents GCP metadata sync from removing it)
+            # Extract public key from private key and ensure it's in authorized_keys
+            PRIVATE_KEY_FILE="/tmp/github_actions_key"
+            echo "${{ secrets.VM_SSH_KEY }}" > "$PRIVATE_KEY_FILE"
+            chmod 600 "$PRIVATE_KEY_FILE"
+            PUBLIC_KEY=$(ssh-keygen -y -f "$PRIVATE_KEY_FILE")
+            rm -f "$PRIVATE_KEY_FILE"
+            
+            # Check if this public key is already in authorized_keys
+            if ! grep -Fq "$PUBLIC_KEY" ~/.ssh/authorized_keys 2>/dev/null; then
+              echo "⚠️ GitHub Actions key missing - re-adding..."
+              echo "$PUBLIC_KEY github-actions" >> ~/.ssh/authorized_keys
+              chmod 600 ~/.ssh/authorized_keys
+              echo "✅ GitHub Actions key restored"
+            else
+              echo "✅ GitHub Actions key already exists"
+            fi
+            
             DEPLOY_PATH="${{ secrets.VM_DEPLOY_PATH || '/home/nexlx99/clubverse' }}"
             cd "$DEPLOY_PATH" || mkdir -p "$DEPLOY_PATH" && cd "$DEPLOY_PATH"
             
