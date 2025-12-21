@@ -42,12 +42,13 @@ jobs:
           cp frontend/package.json frontend/package-lock.json deploy/frontend/
           cp frontend/next.config.js deploy/frontend/ 2>/dev/null || true
           cp frontend/tsconfig.json deploy/frontend/ 2>/dev/null || true
-          cp frontend/tailwind.config.js deploy/frontend/ 2>/dev/null || true
+          cp frontend/tailwind.config.* deploy/frontend/ 2>/dev/null || true
           cp frontend/postcss.config.js deploy/frontend/ 2>/dev/null || true
           cp -r frontend/app deploy/frontend/ 2>/dev/null || true
           cp -r frontend/components deploy/frontend/ 2>/dev/null || true
           cp -r frontend/lib deploy/frontend/ 2>/dev/null || true
           cp -r frontend/types deploy/frontend/ 2>/dev/null || true
+          cp -r frontend/hooks deploy/frontend/ 2>/dev/null || true
           cp -r frontend/public deploy/frontend/ 2>/dev/null || true
           # Note: .env.local files are NOT copied for security - set env vars on VM
           tar -czf deploy.tar.gz deploy/
@@ -113,12 +114,13 @@ jobs:
             cp /tmp/deploy/frontend/package*.json frontend/ 2>/dev/null || true
             cp /tmp/deploy/frontend/next.config.js frontend/ 2>/dev/null || true
             cp /tmp/deploy/frontend/tsconfig.json frontend/ 2>/dev/null || true
-            cp /tmp/deploy/frontend/tailwind.config.js frontend/ 2>/dev/null || true
+            cp /tmp/deploy/frontend/tailwind.config.* frontend/ 2>/dev/null || true
             cp /tmp/deploy/frontend/postcss.config.js frontend/ 2>/dev/null || true
             cp -r /tmp/deploy/frontend/app frontend/ 2>/dev/null || true
             cp -r /tmp/deploy/frontend/components frontend/ 2>/dev/null || true
             cp -r /tmp/deploy/frontend/lib frontend/ 2>/dev/null || true
             cp -r /tmp/deploy/frontend/types frontend/ 2>/dev/null || true
+            cp -r /tmp/deploy/frontend/hooks frontend/ 2>/dev/null || true
             cp -r /tmp/deploy/frontend/public frontend/ 2>/dev/null || true
             
             # Install backend dependencies if needed
