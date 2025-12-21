@@ -19,6 +19,7 @@ import { drinksApi } from '@/lib/api/drinks'
 import { clubsApi } from '@/lib/api/clubs'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { migrateImagePath } from '@/lib/utils/image-path'
 import { Checkbox } from '@/components/ui/checkbox'
 
 interface DrinkListManageModalProps {
@@ -204,9 +205,15 @@ export function DrinkListManageModal({
                       />
                       {drink.image_url ? (
                         <img
-                          src={drink.image_url}
+                          src={migrateImagePath(drink.image_url) || drink.image_url}
                           alt={drink.name}
                           className="w-10 h-10 object-contain rounded-[var(--radius)] bg-background p-1"
+                          onError={(e) => {
+                            // Fallback to original if migrated path fails
+                            if (e.currentTarget.src !== drink.image_url) {
+                              e.currentTarget.src = drink.image_url || ''
+                            }
+                          }}
                         />
                       ) : (
                         <div className="w-10 h-10 rounded-[var(--radius)] bg-muted/50 flex items-center justify-center">

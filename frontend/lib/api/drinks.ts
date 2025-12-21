@@ -40,8 +40,11 @@ export const drinksApi = {
   /**
    * Parse natural language drink input and get preview with brand data
    */
-  parsePreview: async (text: string): Promise<ParsePreviewResponse> => {
-    const response = await apiClient.post<ParsePreviewResponse>('/drinks/parse-preview', {
+  parsePreview: async (text: string, clubId?: string): Promise<ParsePreviewResponse> => {
+    const url = clubId 
+      ? `/drinks/parse-preview?club_id=${clubId}`
+      : '/drinks/parse-preview'
+    const response = await apiClient.post<ParsePreviewResponse>(url, {
       text,
     })
     return response.data

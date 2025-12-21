@@ -15,7 +15,9 @@ class Drink(Base):
     name = Column(String, nullable=False, index=True)
     description = Column(Text, nullable=True)
     price = Column(Numeric(10, 2), nullable=False)
-    category = Column(String, nullable=True)  # e.g., 'beer', 'cocktail', 'shot', 'wine'
+    category = Column(String, nullable=True)  # Legacy: e.g., 'beer', 'cocktail', 'shot', 'wine' (kept for backward compatibility)
+    category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)
+    subcategory_id = Column(UUID(as_uuid=True), ForeignKey("subcategories.id"), nullable=True, index=True)
     image_url = Column(String, nullable=True)
     brand_name = Column(String, nullable=True)  # Brand name for reference
     brand_colors = Column(JSON, nullable=True)  # Brand color palette
@@ -26,6 +28,8 @@ class Drink(Base):
 
     # Relationships
     club = relationship("Club", back_populates="drinks")
+    category_obj = relationship("Category", back_populates="drinks", foreign_keys=[category_id])
+    subcategory_obj = relationship("Subcategory", back_populates="drinks", foreign_keys=[subcategory_id])
     order_items = relationship("OrderItem", back_populates="drink")
     drink_lists = relationship("DrinkList", secondary="drink_list_drinks", back_populates="drinks")
 

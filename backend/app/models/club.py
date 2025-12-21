@@ -35,4 +35,5 @@ class Club(Base):
     bartenders = relationship("Bartender", back_populates="club", cascade="all, delete-orphan")
     drink_lists = relationship("DrinkList", secondary="club_drink_lists", back_populates="clubs")
     user_clubs = relationship("UserClub", back_populates="club", cascade="all, delete-orphan")
+    categories = relationship("Category", back_populates="club", cascade="all, delete-orphan")
 

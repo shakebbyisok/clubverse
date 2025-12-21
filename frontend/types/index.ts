@@ -133,7 +133,11 @@ export interface Drink {
   name: string
   description?: string | null
   price: string
-  category?: string | null
+  category?: string | null  // Legacy field (kept for backward compatibility)
+  category_id?: string | null  // New: FK to categories table
+  subcategory_id?: string | null  // New: FK to subcategories table
+  category_name?: string | null  // For display (derived from category_id)
+  subcategory_name?: string | null  // For display (derived from subcategory_id)
   image_url?: string | null
   brand_name?: string | null
   brand_colors?: any[] | null

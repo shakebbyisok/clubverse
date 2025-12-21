@@ -13,6 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { migrateImagePath } from '@/lib/utils/image-path'
 import { useToast } from '@/hooks/use-toast'
 import {
   Dialog,
@@ -157,9 +158,15 @@ export default function ClubDrinksPage() {
         description: `$${parseFloat(drink.price).toFixed(2)}`,
         icon: drink.image_url ? (
           <img
-            src={drink.image_url}
+            src={migrateImagePath(drink.image_url) || drink.image_url}
             alt={drink.name}
             className="w-10 h-10 object-contain rounded-[var(--radius)] bg-background p-1"
+            onError={(e) => {
+              // Fallback to original if migrated path fails
+              if (e.currentTarget.src !== drink.image_url) {
+                e.currentTarget.src = drink.image_url || ''
+              }
+            }}
           />
         ) : (
           <div className="w-10 h-10 rounded-[var(--radius)] bg-muted/50 flex items-center justify-center">

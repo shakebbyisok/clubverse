@@ -113,18 +113,52 @@ export function InteractiveMap({
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [directionsRenderer, setDirectionsRenderer] = useState<google.maps.DirectionsRenderer | null>(null)
   const [showingDirections, setShowingDirections] = useState(false)
+  const [isDirectionsApiReady, setIsDirectionsApiReady] = useState(false)
   const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null)
 
-  // Initialize Directions Service
+  // Wait for Google Maps API to be fully loaded before initializing Directions Service
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.google?.maps && !directionsServiceRef.current) {
-      directionsServiceRef.current = new window.google.maps.DirectionsService()
+    if (typeof window === 'undefined') return
+
+    // Check if already loaded
+    if (window.google?.maps?.DirectionsService) {
+      if (!directionsServiceRef.current) {
+        directionsServiceRef.current = new window.google.maps.DirectionsService()
+        setIsDirectionsApiReady(true)
+      }
+      return
     }
+
+    // Poll for DirectionsService to become available
+    let attempts = 0
+    const maxAttempts = 50 // 5 seconds total
+    
+    const checkInterval = setInterval(() => {
+      attempts++
+      
+      if (window.google?.maps?.DirectionsService) {
+        if (!directionsServiceRef.current) {
+          directionsServiceRef.current = new window.google.maps.DirectionsService()
+          setIsDirectionsApiReady(true)
+        }
+        clearInterval(checkInterval)
+      } else if (attempts >= maxAttempts) {
+        clearInterval(checkInterval)
+        console.error('Google Maps DirectionsService not available after waiting')
+      }
+    }, 100)
+    
+    return () => clearInterval(checkInterval)
   }, [])
 
   // Initialize Directions Renderer with minimalist styling
   useEffect(() => {
-    if (mapInstance && typeof window !== 'undefined' && window.google?.maps && !directionsRenderer) {
+    if (
+      mapInstance && 
+      typeof window !== 'undefined' && 
+      window.google?.maps?.DirectionsRenderer && 
+      !directionsRenderer
+    ) {
       const renderer = new window.google.maps.DirectionsRenderer({
         map: mapInstance,
         suppressMarkers: true, // Hide default markers
@@ -298,7 +332,15 @@ export function InteractiveMap({
   }, [userLocation, mapInstance, onUserLocationRequest])
 
   const handleShowDirections = useCallback((club: Club) => {
-    if (!userLocation || !club.latitude || !club.longitude || !directionsRenderer || !directionsServiceRef.current || !mapInstance) {
+    if (
+      !userLocation || 
+      !club.latitude || 
+      !club.longitude || 
+      !directionsRenderer || 
+      !directionsServiceRef.current || 
+      !mapInstance ||
+      !isDirectionsApiReady
+    ) {
       return
     }
 
@@ -343,7 +385,7 @@ export function InteractiveMap({
         }
       }
     )
-  }, [userLocation, directionsRenderer, mapInstance, showingDirections, selectedClub])
+  }, [userLocation, directionsRenderer, mapInstance, showingDirections, selectedClub, isDirectionsApiReady])
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 

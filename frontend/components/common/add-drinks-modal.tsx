@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, Save, Wine, Sparkles, X, Edit2 } from 'lucide-react'
+import { Loader2, Save, Wine, Sparkles, X, Edit2, ChevronDown, ChevronUp } from 'lucide-react'
 import { NumberInput } from './number-input'
 import { useToast } from '@/hooks/use-toast'
 import { drinksApi, DrinkPreview } from '@/lib/api/drinks'
@@ -40,6 +40,7 @@ export function AddDrinksModal({
   const [clubId, setClubId] = useState<string | null>(null)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [editingField, setEditingField] = useState<'name' | 'price' | 'category' | null>(null)
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
   // Get club ID when modal opens
   useEffect(() => {
@@ -71,7 +72,7 @@ export function AddDrinksModal({
 
     setIsParsing(true)
     try {
-      const response = await drinksApi.parsePreview(inputText)
+      const response = await drinksApi.parsePreview(inputText, clubId || undefined)
       setPreviewDrinks(response.drinks)
       
       if (response.drinks.length === 0) {
@@ -162,6 +163,42 @@ export function AddDrinksModal({
     })
   }
 
+  // Group drinks by category
+  const drinksByCategory = previewDrinks.reduce((acc, drink, index) => {
+    const category = drink.category || 'Uncategorized'
+    if (!acc[category]) {
+      acc[category] = []
+    }
+    acc[category].push({ ...drink, originalIndex: index })
+    return acc
+  }, {} as Record<string, Array<DrinkPreview & { originalIndex: number }>>)
+
+  // Initialize expanded categories when drinks are parsed
+  useEffect(() => {
+    if (previewDrinks.length > 0) {
+      const categories = new Set<string>()
+      previewDrinks.forEach(drink => {
+        const category = drink.category || 'Uncategorized'
+        categories.add(category)
+      })
+      setExpandedCategories(categories)
+    } else {
+      setExpandedCategories(new Set())
+    }
+  }, [previewDrinks.length])
+
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(category)) {
+        newSet.delete(category)
+      } else {
+        newSet.add(category)
+      }
+      return newSet
+    })
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0">
@@ -180,194 +217,213 @@ export function AddDrinksModal({
                 <Label>Preview ({previewDrinks.length} {previewDrinks.length === 1 ? 'drink' : 'drinks'})</Label>
               </div>
               <div className="flex-1 space-y-2 overflow-y-auto scrollbar-elegant">
-                {previewDrinks.map((drink, index) => {
-                  const isEditingName = editingIndex === index && editingField === 'name'
-                  const isEditingPrice = editingIndex === index && editingField === 'price'
-                  const isEditingCategory = editingIndex === index && editingField === 'category'
+                {Object.entries(drinksByCategory).map(([category, drinks]) => {
+                  const isExpanded = expandedCategories.has(category)
+                  const categoryCount = drinks.length
                   
                   return (
-                    <div
-                      key={index}
-                      className="group relative flex items-start gap-3 p-3 rounded-[var(--radius)] border border-border/40 bg-card/50 hover:bg-card transition-colors"
-                    >
-                      {/* Remove drink button */}
+                    <div key={category} className="space-y-1.5">
+                      {/* Category Header - Expandable Button */}
                       <button
                         type="button"
-                        onClick={() => handleRemoveDrink(index)}
-                        className="absolute -top-2 -right-2 p-1 bg-background border border-border/40 rounded-full hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors opacity-0 group-hover:opacity-100"
+                        onClick={() => toggleCategory(category)}
+                        className="w-full flex items-center justify-between p-2.5 rounded-lg border border-border/40 bg-card/50 hover:bg-card transition-colors group"
                       >
-                        <X className="h-3 w-3" />
+                        <div className="flex items-center gap-2">
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span className="text-sm font-semibold text-foreground">
+                            {category}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            ({categoryCount} {categoryCount === 1 ? 'drink' : 'drinks'})
+                          </span>
+                        </div>
                       </button>
 
-                      {/* Logo with remove button */}
-                      <div className="relative flex-shrink-0">
-                        {drink.logo_url ? (
-                          <>
-                            <img
-                              src={drink.logo_url}
-                              alt={drink.name}
-                              className="w-12 h-12 object-contain rounded-[var(--radius)] bg-background p-1"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveLogo(index)}
-                              className="absolute -top-1 -right-1 p-0.5 bg-background border border-border/40 rounded-full hover:bg-destructive hover:border-destructive transition-colors"
-                            >
-                              <X className="h-2.5 w-2.5" />
-                            </button>
-                          </>
-                        ) : (
-                          <div className="w-12 h-12 rounded-[var(--radius)] bg-muted/50 flex items-center justify-center">
-                            <Wine className="h-6 w-6 text-muted-foreground" />
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Editable content */}
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        {/* Name */}
-                        <div className="flex items-center gap-2">
-                          {isEditingName ? (
-                            <Input
-                              value={drink.name}
-                              onChange={(e) => handleUpdateDrink(index, 'name', e.target.value)}
-                              onBlur={() => {
-                                setEditingIndex(null)
-                                setEditingField(null)
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  setEditingIndex(null)
-                                  setEditingField(null)
-                                }
-                              }}
-                              className="text-sm h-7 flex-1"
-                              autoFocus
-                            />
-                          ) : (
-                            <>
-                              <span 
-                                className="text-sm font-medium cursor-pointer hover:text-primary transition-colors"
-                                onClick={() => {
-                                  setEditingIndex(index)
-                                  setEditingField('name')
-                                }}
+                      {/* Category Content - Expanded by default */}
+                      {isExpanded && (
+                        <div className="ml-6 space-y-2">
+                          {drinks.map((drink) => {
+                            const index = drink.originalIndex
+                            const isEditingName = editingIndex === index && editingField === 'name'
+                            const isEditingPrice = editingIndex === index && editingField === 'price'
+                            const isEditingCategory = editingIndex === index && editingField === 'category'
+                            
+                            return (
+                              <div
+                                key={index}
+                                className="group relative flex items-start gap-3 p-3 rounded-[var(--radius)] border border-border/40 bg-card/30 hover:bg-card transition-colors"
                               >
-                                {drink.name}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingIndex(index)
-                                  setEditingField('name')
-                                }}
-                                className="p-0.5 hover:bg-accent rounded transition-colors"
-                              >
-                                <Edit2 className="h-3 w-3 text-muted-foreground" />
-                              </button>
-                            </>
-                          )}
-                          {isEditingCategory ? (
-                            <Input
-                              value={drink.category || ''}
-                              onChange={(e) => handleUpdateDrink(index, 'category', e.target.value)}
-                              onBlur={() => {
-                                setEditingIndex(null)
-                                setEditingField(null)
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  setEditingIndex(null)
-                                  setEditingField(null)
-                                }
-                              }}
-                              placeholder="Category"
-                              className="text-xs h-6 w-24"
-                              autoFocus
-                            />
-                          ) : drink.category ? (
-                            <Badge 
-                              variant="secondary" 
-                              className="text-xs px-1.5 py-0 uppercase cursor-pointer hover:bg-accent transition-colors"
-                              onClick={() => {
-                                setEditingIndex(index)
-                                setEditingField('category')
-                              }}
-                            >
-                              {drink.category}
-                            </Badge>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingIndex(index)
-                                setEditingField('category')
-                              }}
-                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                              Add category
-                            </button>
-                          )}
-                          {drink.brand_name && (
-                            <Badge variant="outline" className="text-xs px-1.5 py-0">
-                              {drink.brand_name}
-                            </Badge>
-                          )}
+                                {/* Remove drink button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDrink(index)}
+                                  className="absolute -top-2 -right-2 p-1 bg-background border border-border/40 rounded-full hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors opacity-0 group-hover:opacity-100"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+
+                                {/* Logo with remove button */}
+                                <div className="relative flex-shrink-0">
+                                  {drink.logo_url ? (
+                                    <>
+                                      <img
+                                        src={drink.logo_url}
+                                        alt={drink.name}
+                                        className="w-12 h-12 object-contain rounded-[var(--radius)] bg-background p-1"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveLogo(index)}
+                                        className="absolute -top-1 -right-1 p-0.5 bg-background border border-border/40 rounded-full hover:bg-destructive hover:border-destructive transition-colors"
+                                      >
+                                        <X className="h-2.5 w-2.5" />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <div className="w-12 h-12 rounded-[var(--radius)] bg-muted/50 flex items-center justify-center">
+                                      <Wine className="h-6 w-6 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Editable content */}
+                                <div className="flex-1 min-w-0 space-y-1.5">
+                                  {/* Name */}
+                                  <div className="flex items-center gap-2">
+                                    {isEditingName ? (
+                                      <Input
+                                        value={drink.name}
+                                        onChange={(e) => handleUpdateDrink(index, 'name', e.target.value)}
+                                        onBlur={() => {
+                                          setEditingIndex(null)
+                                          setEditingField(null)
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            setEditingIndex(null)
+                                            setEditingField(null)
+                                          }
+                                        }}
+                                        className="text-sm h-7 flex-1"
+                                        autoFocus
+                                      />
+                                    ) : (
+                                      <>
+                                        <span 
+                                          className="text-sm font-medium cursor-pointer hover:text-primary transition-colors"
+                                          onClick={() => {
+                                            setEditingIndex(index)
+                                            setEditingField('name')
+                                          }}
+                                        >
+                                          {drink.name}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingIndex(index)
+                                            setEditingField('name')
+                                          }}
+                                          className="p-0.5 hover:bg-accent rounded transition-colors"
+                                        >
+                                          <Edit2 className="h-3 w-3 text-muted-foreground" />
+                                        </button>
+                                      </>
+                                    )}
+                                    {drink.brand_name && (
+                                      <Badge variant="outline" className="text-xs px-1.5 py-0">
+                                        {drink.brand_name}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Price */}
+                                  <div className="flex items-center gap-2">
+                                    {isEditingPrice ? (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">$</span>
+                                        <NumberInput
+                                          value={drink.price}
+                                          onChange={(value) => {
+                                            handleUpdateDrink(index, 'price', value)
+                                          }}
+                                          min={0}
+                                          step={0.01}
+                                          allowDecimals={true}
+                                          className="flex-shrink-0"
+                                        />
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => {
+                                            setEditingIndex(null)
+                                            setEditingField(null)
+                                          }}
+                                          className="h-7 px-2 text-xs"
+                                        >
+                                          Done
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <span 
+                                          className="text-sm font-semibold text-muted-foreground cursor-pointer hover:text-primary transition-colors"
+                                          onClick={() => {
+                                            setEditingIndex(index)
+                                            setEditingField('price')
+                                          }}
+                                        >
+                                          ${drink.price.toFixed(2)}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingIndex(index)
+                                            setEditingField('price')
+                                          }}
+                                          className="p-0.5 hover:bg-accent rounded transition-colors"
+                                        >
+                                          <Edit2 className="h-3 w-3 text-muted-foreground" />
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Category Edit (inline) */}
+                                  {isEditingCategory && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-muted-foreground">Category:</span>
+                                      <Input
+                                        value={drink.category || ''}
+                                        onChange={(e) => handleUpdateDrink(index, 'category', e.target.value)}
+                                        onBlur={() => {
+                                          setEditingIndex(null)
+                                          setEditingField(null)
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            setEditingIndex(null)
+                                            setEditingField(null)
+                                          }
+                                        }}
+                                        placeholder="Category"
+                                        className="text-xs h-6 w-32"
+                                        autoFocus
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
-                        
-                        {/* Price */}
-                        <div className="flex items-center gap-2">
-                          {isEditingPrice ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-muted-foreground">$</span>
-                              <NumberInput
-                                value={drink.price}
-                                onChange={(value) => {
-                                  handleUpdateDrink(index, 'price', value)
-                                }}
-                                min={0}
-                                step={0.01}
-                                allowDecimals={true}
-                                className="flex-shrink-0"
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingIndex(null)
-                                  setEditingField(null)
-                                }}
-                                className="h-7 px-2 text-xs"
-                              >
-                                Done
-                              </Button>
-                            </div>
-                          ) : (
-                            <>
-                              <span 
-                                className="text-sm font-semibold text-muted-foreground cursor-pointer hover:text-primary transition-colors"
-                                onClick={() => {
-                                  setEditingIndex(index)
-                                  setEditingField('price')
-                                }}
-                              >
-                                ${drink.price.toFixed(2)}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingIndex(index)
-                                  setEditingField('price')
-                                }}
-                                className="p-0.5 hover:bg-accent rounded transition-colors"
-                              >
-                                <Edit2 className="h-3 w-3 text-muted-foreground" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
+                      )}
                     </div>
                   )
                 })}

@@ -5,7 +5,7 @@ from app.core.config import settings
 from app.api.v1.router import api_router
 from app.db.base import Base, engine
 # Import all models to ensure they're registered with SQLAlchemy
-from app.models import User, Club, Drink, DrinkList, Order, OrderItem, Bartender, UserClub
+from app.models import User, Club, Drink, DrinkList, Order, OrderItem, Bartender, UserClub, Category, Subcategory
 
 # Create database tables
 Base.metadata.create_all(bind=engine)

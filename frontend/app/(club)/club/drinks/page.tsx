@@ -30,6 +30,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
+import { migrateImagePath } from '@/lib/utils/image-path'
 
 type ViewMode = 'lists' | 'drinks'
 
@@ -175,9 +176,15 @@ export default function DrinksPage() {
         <div className="flex items-center gap-2.5">
           {drink.image_url ? (
             <img
-              src={drink.image_url}
+              src={migrateImagePath(drink.image_url) || drink.image_url}
               alt={drink.name}
               className="w-8 h-8 object-contain rounded-[var(--radius)] bg-background p-1"
+              onError={(e) => {
+                // Fallback to original if migrated path fails
+                if (e.currentTarget.src !== drink.image_url) {
+                  e.currentTarget.src = drink.image_url || ''
+                }
+              }}
             />
           ) : (
             <div className="w-8 h-8 rounded-[var(--radius)] bg-muted/50 flex items-center justify-center">
