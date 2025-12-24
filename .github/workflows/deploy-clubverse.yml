@@ -36,7 +36,13 @@ jobs:
         run: |
           mkdir -p deploy/frontend
           cp -r backend deploy/
+          # Copy entire .next folder with all files (including BUILD_ID)
           cp -r frontend/.next deploy/frontend-next
+          # Verify BUILD_ID exists
+          if [ ! -f "frontend/.next/BUILD_ID" ]; then
+            echo "❌ BUILD_ID missing - build may be incomplete"
+            exit 1
+          fi
           cp frontend/package.json frontend/package-lock.json deploy/frontend/
           cp frontend/next.config.js deploy/frontend/ 2>/dev/null || true
           cp frontend/public deploy/frontend/ -r 2>/dev/null || true
@@ -79,12 +85,24 @@ jobs:
             
             # Deploy frontend
             echo "Deploying frontend..."
-            rm -rf frontend/.next
             mkdir -p frontend
+            # Remove old .next atomically by moving to temp first
+            if [ -d "frontend/.next" ]; then
+              mv frontend/.next frontend/.next.old.$(date +%s) || rm -rf frontend/.next
+            fi
+            # Copy new .next folder
             cp -r /tmp/deploy/frontend-next frontend/.next
+            # Verify BUILD_ID exists
+            if [ ! -f "frontend/.next/BUILD_ID" ]; then
+              echo "❌ BUILD_ID missing after copy - deployment may be incomplete"
+              exit 1
+            fi
+            # Copy other frontend files
             cp /tmp/deploy/frontend/package*.json frontend/ 2>/dev/null || true
             cp /tmp/deploy/frontend/next.config.js frontend/ 2>/dev/null || true
             cp -r /tmp/deploy/frontend/public frontend/ 2>/dev/null || true
+            # Clean up old .next backups (keep last 2)
+            find frontend -maxdepth 1 -type d -name ".next.old.*" | sort -r | tail -n +3 | xargs rm -rf 2>/dev/null || true
             
             # Install backend dependencies if needed
             if [ -f "backend/requirements.txt" ]; then
