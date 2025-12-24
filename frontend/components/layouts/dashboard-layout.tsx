@@ -88,15 +88,36 @@ export function DashboardLayout({
       <aside className="hidden lg:flex lg:w-48 lg:flex-col border-r border-border/40 bg-card/30 backdrop-blur-sm">
         <div className="flex-1 flex flex-col">
           {/* Logo/Brand */}
-          <div className="h-12 flex items-center justify-center px-3 border-b border-border/40 gap-2">
-            <Image 
-              src="/assets/previa/whiteprevia.svg" 
-              alt="La Previa" 
-              width={40}
-              height={40}
-              className="h-10 w-auto dark:invert-0 invert"
-              unoptimized
-            />
+          <div className="h-12 flex items-center justify-center px-3 border-b border-border/40">
+            {showClubSelector ? (
+              <div className="flex items-center gap-2">
+                <Image 
+                  src="/assets/whiteicon.svg"
+                  alt="" 
+                  width={28}
+                  height={28}
+                  className="h-7 w-7 dark:invert-0 invert flex-shrink-0"
+                  unoptimized
+                />
+                <Image 
+                  src="/assets/whiteclubverse.svg"
+                  alt="Clubverse" 
+                  width={90}
+                  height={20}
+                  className="h-[18px] w-auto dark:invert-0 invert"
+                  unoptimized
+                />
+              </div>
+            ) : (
+              <Image 
+                src="/assets/previa/whiteprevia.svg" 
+                alt="La Previa" 
+                width={36}
+                height={36}
+                className="h-9 w-auto dark:invert-0 invert"
+                unoptimized
+              />
+            )}
           </div>
 
           {/* Club Selector - Only for Club Owners */}
@@ -166,15 +187,36 @@ export function DashboardLayout({
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
           <aside className="fixed inset-y-0 left-0 w-48 bg-card border-r border-border/40 flex flex-col">
-            <div className="h-12 flex items-center justify-center px-3 border-b border-border/40 gap-2 relative">
-              <Image 
-                src="/assets/previa/whiteprevia.svg" 
-                alt="La Previa" 
-                width={40}
-                height={40}
-                className="h-10 w-auto dark:invert-0 invert"
-                unoptimized
-              />
+            <div className="h-12 flex items-center justify-center px-3 border-b border-border/40 relative">
+              {showClubSelector ? (
+                <div className="flex items-center gap-2">
+                  <Image 
+                    src="/assets/whiteicon.svg"
+                    alt="" 
+                    width={28}
+                    height={28}
+                    className="h-7 w-7 dark:invert-0 invert flex-shrink-0"
+                    unoptimized
+                  />
+                  <Image 
+                    src="/assets/whiteclubverse.svg"
+                    alt="Clubverse" 
+                    width={90}
+                    height={20}
+                    className="h-[18px] w-auto dark:invert-0 invert"
+                    unoptimized
+                  />
+                </div>
+              ) : (
+                <Image 
+                  src="/assets/previa/whiteprevia.svg" 
+                  alt="La Previa" 
+                  width={36}
+                  height={36}
+                  className="h-9 w-auto dark:invert-0 invert"
+                  unoptimized
+                />
+              )}
               <button onClick={() => setSidebarOpen(false)} className="absolute top-2 right-2 p-1.5">
                 <X className="h-4 w-4" />
               </button>

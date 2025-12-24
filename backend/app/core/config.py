@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     # Stripe
     STRIPE_SECRET_KEY: str
     STRIPE_PUBLISHABLE_KEY: str
-    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None  # For payment webhooks
+    STRIPE_CONNECT_WEBHOOK_SECRET: Optional[str] = None  # For Connect account webhooks
     
     # OpenRouter
     OPENROUTER_KEY: Optional[str] = None

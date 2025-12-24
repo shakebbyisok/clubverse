@@ -1,11 +1,12 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Plus, Wine, Loader2, Building2, List, MoreVertical } from 'lucide-react'
+import { Plus, Wine, Loader2, Building2, List, MoreVertical, Filter, Settings } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { drinksApi, Drink } from '@/lib/api/drinks'
 import { drinkListsApi } from '@/lib/api/drink-lists'
 import { clubsApi } from '@/lib/api/clubs'
+import { categoriesApi, Category } from '@/lib/api/categories'
 import { useToast } from '@/hooks/use-toast'
 import { DrinkList } from '@/types'
 import { CompactTable, CompactTableColumn } from '@/components/common/compact-table'
@@ -13,22 +14,17 @@ import { Pagination } from '@/components/common/pagination'
 import { DrinkListFormModal } from '@/components/common/drink-list-form-modal'
 import { DrinkListManageModal } from '@/components/common/drink-list-manage-modal'
 import { AddDrinksModal } from '@/components/common/add-drinks-modal'
+import { DrinkEditModal, DrinkUpdateData } from '@/components/common/drink-edit-modal'
+import { CategoryManageModal } from '@/components/common/category-manage-modal'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { CategorySelect } from '@/components/common/category-select'
+import { CategoryFilterSelect } from '@/components/common/category-filter-select'
+import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { cn } from '@/lib/utils'
 import { migrateImagePath } from '@/lib/utils/image-path'
 
@@ -49,6 +45,18 @@ export default function DrinksPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedDrinks, setSelectedDrinks] = useState<Set<string>>(new Set())
   const [isDeletingBulk, setIsDeletingBulk] = useState(false)
+  const [editingDrink, setEditingDrink] = useState<Drink | null>(null)
+  const [deletingDrink, setDeletingDrink] = useState<Drink | null>(null)
+  const [isDeletingDrink, setIsDeletingDrink] = useState(false)
+  const [togglingDrinkId, setTogglingDrinkId] = useState<string | null>(null)
+  const [updatingCategoryDrinkId, setUpdatingCategoryDrinkId] = useState<string | null>(null)
+  
+  // Categories for filtering
+  const [systemCategories, setSystemCategories] = useState<Category[]>([])
+  const [customCategories, setCustomCategories] = useState<Category[]>([])
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+  
   const itemsPerPage = 20
   const { toast } = useToast()
 
@@ -60,13 +68,16 @@ export default function DrinksPage() {
         if (club && club.id) {
           setClubId(club.id)
           
-          const [clubDrinks, lists] = await Promise.all([
+          const [clubDrinks, lists, categoryTree] = await Promise.all([
             drinksApi.getClubDrinks(club.id),
             drinkListsApi.getAll(),
+            categoriesApi.getClubCategories(club.id),
           ])
           
           setDrinks(clubDrinks)
           setDrinkLists(lists)
+          setSystemCategories(categoryTree.system_categories)
+          setCustomCategories(categoryTree.custom_categories)
         }
       } catch (error: any) {
         toast({
@@ -105,6 +116,17 @@ export default function DrinksPage() {
         title: 'Error',
         description: 'Failed to load drinks',
       })
+    }
+  }
+
+  const loadCategories = async () => {
+    if (!clubId) return
+    try {
+      const categoryTree = await categoriesApi.getClubCategories(clubId)
+      setSystemCategories(categoryTree.system_categories)
+      setCustomCategories(categoryTree.custom_categories)
+    } catch (error: any) {
+      // Silently fail - categories are not critical
     }
   }
 
@@ -160,12 +182,151 @@ export default function DrinksPage() {
     }
   }
 
-  // Paginate drinks
+  // Handle single drink delete
+  const handleDeleteDrink = async () => {
+    if (!deletingDrink) return
+    
+    setIsDeletingDrink(true)
+    try {
+      await drinksApi.delete(deletingDrink.id)
+      toast({
+        title: 'Success!',
+        description: 'Drink deleted successfully',
+      })
+      setDeletingDrink(null)
+      await loadDrinks()
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.response?.data?.detail || 'Failed to delete drink',
+      })
+    } finally {
+      setIsDeletingDrink(false)
+    }
+  }
+
+  // Handle drink update
+  const handleUpdateDrink = async (drinkId: string, data: DrinkUpdateData) => {
+    await drinksApi.update(drinkId, data)
+    await loadDrinks()
+  }
+
+  // Filter drinks by category
+  const filteredDrinks = useMemo(() => {
+    if (categoryFilter === 'all') return drinks
+    if (categoryFilter === 'uncategorized') {
+      return drinks.filter(d => !d.category_id && !d.category)
+    }
+    return drinks.filter(d => d.category_id === categoryFilter)
+  }, [drinks, categoryFilter])
+
+  // Paginate filtered drinks
   const paginatedDrinks = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage
-    return drinks.slice(start, start + itemsPerPage)
-  }, [drinks, currentPage])
+    return filteredDrinks.slice(start, start + itemsPerPage)
+  }, [filteredDrinks, currentPage])
+  
+  // All categories for the filter
+  const allCategories = useMemo(() => {
+    return [...systemCategories, ...customCategories]
+  }, [systemCategories, customCategories])
 
+
+  // Handle inline category change with optimistic updates
+  const handleCategoryChange = async (drink: Drink, categoryId: string | null) => {
+    const category = allCategories.find(c => c.id === categoryId)
+    const drinkId = drink.id
+    
+    setUpdatingCategoryDrinkId(drinkId)
+    
+    // Optimistic update - update UI immediately
+    setDrinks(prevDrinks => 
+      prevDrinks.map(d => 
+        d.id === drinkId ? { 
+          ...d, 
+          category_id: categoryId,
+          category_name: category?.name || null,
+          category: category?.name || null, // Also update legacy field for consistency
+        } : d
+      )
+    )
+    
+    try {
+      await drinksApi.update(drinkId, {
+        category: category?.name || null,
+        category_id: categoryId,
+      })
+      
+      // Reload to ensure we have the latest data from backend
+      await Promise.all([
+        loadDrinks(),
+        loadCategories(), // Refresh categories in case new ones were added
+      ])
+    } catch (error: any) {
+      // Revert on error
+      setDrinks(prevDrinks => 
+        prevDrinks.map(d => 
+          d.id === drinkId ? { 
+            ...d, 
+            category_id: drink.category_id,
+            category_name: drink.category_name,
+            category: drink.category,
+          } : d
+        )
+      )
+      
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update category',
+      })
+    } finally {
+      setUpdatingCategoryDrinkId(null)
+    }
+  }
+
+  // Handle availability toggle with optimistic updates
+  const handleToggleAvailability = async (drink: Drink) => {
+    const newStatus = !drink.is_available
+    const drinkId = drink.id
+    
+    // Optimistic update - update UI immediately
+    setDrinks(prevDrinks => 
+      prevDrinks.map(d => 
+        d.id === drinkId ? { ...d, is_available: newStatus } : d
+      )
+    )
+    
+    setTogglingDrinkId(drinkId)
+    
+    try {
+      await drinksApi.update(drinkId, {
+        is_available: newStatus,
+      })
+      
+      toast({
+        title: 'Updated',
+        description: `${drink.name} is now ${newStatus ? 'available' : 'unavailable'}`,
+        duration: 2000,
+      })
+    } catch (error: any) {
+      // Revert on error
+      setDrinks(prevDrinks => 
+        prevDrinks.map(d => 
+          d.id === drinkId ? { ...d, is_available: !newStatus } : d
+        )
+      )
+      
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update availability',
+      })
+    } finally {
+      setTogglingDrinkId(null)
+    }
+  }
 
   // Table columns for drinks
   const drinkColumns: CompactTableColumn<Drink>[] = [
@@ -191,14 +352,36 @@ export default function DrinksPage() {
               <Wine className="h-4 w-4 text-muted-foreground" />
             </div>
           )}
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">{drink.name}</span>
-            {drink.category && (
-              <span className="text-xs text-muted-foreground">{drink.category}</span>
-            )}
-          </div>
+          <span className="text-sm font-medium">{drink.name}</span>
         </div>
       ),
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      width: '160px',
+      cell: (drink) => {
+        // Get category name from categories list if category_id is set, otherwise use drink.category_name
+        const categoryFromList = drink.category_id 
+          ? allCategories.find(c => c.id === drink.category_id)?.name
+          : null
+        const displayName = categoryFromList || drink.category_name || drink.category || null
+        const isUpdating = updatingCategoryDrinkId === drink.id
+        
+        return (
+          <CategorySelect
+            value={drink.category_id || null}
+            onValueChange={(value) => handleCategoryChange(drink, value)}
+            systemCategories={systemCategories}
+            customCategories={customCategories}
+            placeholder="No category"
+            className="w-[140px]"
+            displayCategoryName={displayName}
+            disabled={isUpdating}
+            isLoading={isUpdating}
+          />
+        )
+      },
     },
     {
       key: 'price',
@@ -212,24 +395,34 @@ export default function DrinksPage() {
     {
       key: 'status',
       header: 'Status',
-      cell: (drink) => (
-        <span className={`text-xs px-2 py-1 rounded-full ${
-          drink.is_available 
-            ? 'bg-green-500/10 text-green-600 dark:text-green-400' 
-            : 'bg-muted text-muted-foreground'
-        }`}>
-          {drink.is_available ? 'Available' : 'Unavailable'}
-        </span>
-      ),
-    },
-    {
-      key: 'description',
-      header: 'Description',
-      cell: (drink) => (
-        <span className="text-sm text-muted-foreground truncate max-w-[200px]">
-          {drink.description || '-'}
-        </span>
-      ),
+      cell: (drink) => {
+        const isToggling = togglingDrinkId === drink.id
+        return (
+          <button
+            onClick={() => handleToggleAvailability(drink)}
+            disabled={isToggling}
+            className={cn(
+              'text-xs px-2 py-1 rounded-full transition-all cursor-pointer relative',
+              'hover:opacity-80 active:scale-95 disabled:opacity-50 disabled:cursor-wait',
+              'ring-2 ring-transparent',
+              drink.is_available 
+                ? 'bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15' 
+                : 'bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/15',
+              isToggling && 'ring-primary/50 animate-pulse'
+            )}
+            title={`Click to mark as ${drink.is_available ? 'unavailable' : 'available'}`}
+          >
+            {isToggling ? (
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Updating...</span>
+              </span>
+            ) : (
+              drink.is_available ? 'Available' : 'Unavailable'
+            )}
+          </button>
+        )
+      },
     },
     {
       key: 'actions',
@@ -248,8 +441,15 @@ export default function DrinksPage() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>Edit</DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setEditingDrink(drink)}>
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-destructive"
+              onClick={() => setDeletingDrink(drink)}
+            >
+              Delete
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       ),
@@ -373,28 +573,54 @@ export default function DrinksPage() {
   return (
     <div className="space-y-6">
       {/* Header with Tabs */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setViewMode(tab.id as ViewMode)
-                setCurrentPage(1)
+          <div className="flex items-center gap-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setViewMode(tab.id as ViewMode)
+                  setCurrentPage(1)
                   setSelectedDrinks(new Set()) // Clear selection when switching tabs
-              }}
-              className={cn(
-                'px-3 py-1.5 text-sm font-medium border-b-2 transition-colors',
-                viewMode === tab.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+                }}
+                className={cn(
+                  'px-3 py-1.5 text-sm font-medium border-b-2 transition-colors',
+                  viewMode === tab.id
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          
+          {/* Category filter and manage - only show on drinks tab */}
+          {viewMode === 'drinks' && (
+            <>
+              <CategoryFilterSelect
+                value={categoryFilter}
+                onValueChange={(value) => {
+                  setCategoryFilter(value)
+                  setCurrentPage(1)
+                }}
+                systemCategories={systemCategories}
+                customCategories={customCategories}
+              />
+              
+              {/* Manage categories button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsCategoryModalOpen(true)}
+                className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                title="Manage Categories"
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
           
           {/* Bulk delete button - only show when drinks are selected */}
           {viewMode === 'drinks' && selectedDrinks.size > 0 && (
@@ -439,11 +665,11 @@ export default function DrinksPage() {
             onRowSelect={handleRowSelect}
             onSelectAll={handleSelectAll}
           />
-          {drinks.length > itemsPerPage && (
+          {filteredDrinks.length > itemsPerPage && (
             <Pagination
               currentPage={currentPage}
-              totalPages={Math.ceil(drinks.length / itemsPerPage)}
-              totalItems={drinks.length}
+              totalPages={Math.ceil(filteredDrinks.length / itemsPerPage)}
+              totalItems={filteredDrinks.length}
               itemsPerPage={itemsPerPage}
               onPageChange={setCurrentPage}
             />
@@ -492,25 +718,56 @@ export default function DrinksPage() {
         }}
       />
 
-      <AlertDialog open={!!deletingList} onOpenChange={(open) => !open && setDeletingList(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Drink List</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete &quot;{deletingList?.name}&quot;? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteList}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={!!deletingList}
+        onOpenChange={(open) => !open && setDeletingList(null)}
+        title="Delete Drink List"
+        description={
+          <>
+            Are you sure you want to delete <span className="font-medium text-foreground">{deletingList?.name}</span>? This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        onConfirm={handleDeleteList}
+        variant="destructive"
+      />
+
+      {/* Drink Edit Modal */}
+      {clubId && (
+        <DrinkEditModal
+          open={!!editingDrink}
+          onOpenChange={(open) => !open && setEditingDrink(null)}
+          drink={editingDrink}
+          clubId={clubId}
+          onSave={handleUpdateDrink}
+        />
+      )}
+
+      {/* Delete Drink Confirmation */}
+      <ConfirmDialog
+        open={!!deletingDrink}
+        onOpenChange={(open) => !open && setDeletingDrink(null)}
+        title="Delete Drink"
+        description={
+          <>
+            Are you sure you want to delete <span className="font-medium text-foreground">{deletingDrink?.name}</span>? This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        onConfirm={handleDeleteDrink}
+        isLoading={isDeletingDrink}
+        variant="destructive"
+      />
+
+      {/* Category Management Modal */}
+      {clubId && (
+        <CategoryManageModal
+          open={isCategoryModalOpen}
+          onOpenChange={setIsCategoryModalOpen}
+          clubId={clubId}
+          onCategoriesChanged={loadCategories}
+        />
+      )}
     </div>
   )
 }

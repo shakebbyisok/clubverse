@@ -5,15 +5,17 @@ import { useRouter } from 'next/navigation'
 import { useClubs } from '@/lib/queries/use-clubs'
 import { useGeolocation } from '@/hooks/use-geolocation'
 import { useMyOrders } from '@/lib/queries/use-orders'
+import { useUserClubs } from '@/lib/queries/use-user-clubs'
 import { PartnerClubCard } from '@/components/common/partner-club-card'
 import { StaticMapBackground } from '@/components/map/static-map-background'
-import { Loader2, AlertCircle, MapPin, Wine } from 'lucide-react'
+import { Loader2, AlertCircle, MapPin, ArrowRight } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Club } from '@/types'
 
 export default function NearestClubPage() {
   const router = useRouter()
   const { data: clubs, isLoading, error } = useClubs()
+  const { data: userClubs } = useUserClubs()
   const { latitude, longitude, error: geoError } = useGeolocation()
   const { data: orders } = useMyOrders(0, 1) // Get most recent order
 
@@ -137,8 +139,8 @@ export default function NearestClubPage() {
       {/* Content Overlay */}
       <div className="relative z-10 min-h-full flex items-center justify-center">
         <div className="w-full max-w-sm px-4">
-          {/* Geolocation error banner */}
-          {geoError && (
+          {/* Geolocation error banner - only show if permission was actually denied */}
+          {geoError && geoError.code === geoError.PERMISSION_DENIED && (
             <Alert className="bg-card/95 backdrop-blur-sm border-border/40 mb-6">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-xs">
@@ -148,21 +150,24 @@ export default function NearestClubPage() {
           )}
 
           {/* Partner Club Card */}
-          <div className="mb-8">
+          <div className="mb-6">
             <PartnerClubCard
               club={nearestClub.club}
               distance={nearestClub.distance}
+              points={userClubs?.find(uc => uc.club_id === nearestClub.club.id)?.points ?? 0}
             />
           </div>
 
-          {/* Order Button - Centered */}
+          {/* Order Button - Compact & Elegant */}
           <div className="flex justify-center">
             <button
               onClick={handleOrder}
-              className="flex items-center gap-3 px-10 py-4 rounded-2xl bg-foreground text-background border-2 border-background/20 transition-all active:scale-95 shadow-lg hover:border-background/30"
+              className="group flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-black transition-all duration-200 active:scale-[0.98] hover:shadow-lg hover:shadow-white/20"
             >
-              <Wine className="h-5 w-5" />
-              <span className="text-[17px] font-light tracking-[0.1em] uppercase">Order</span>
+              <span className="text-[13px] font-medium tracking-wide">
+                View Menu
+              </span>
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </button>
           </div>
         </div>

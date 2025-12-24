@@ -5,6 +5,7 @@ import { APIProvider, Map, Marker, useMap } from '@vis.gl/react-google-maps'
 import { Club } from '@/types'
 import { CustomClubMarker } from './custom-club-marker'
 import { ClubInfoBadge } from './club-info-badge'
+import { ClubverseLoader } from '@/components/common/clubverse-loader'
 import { Navigation } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -19,65 +20,56 @@ interface InteractiveMapProps {
   onUserLocationRequest?: () => void
 }
 
-// Elegant minimalist map style - dark with essential labels
+// Ultra clean minimalist map style - dark, no labels, no grids
 const mapStyles: google.maps.MapTypeStyle[] = [
-  // Base map - very dark
+  // Hide ALL labels globally
   {
     featureType: 'all',
-    elementType: 'geometry',
-    stylers: [{ color: '#0a0a0a' }],
-  },
-  // City names - visible
-  {
-    featureType: 'administrative.locality',
-    elementType: 'labels.text.fill',
-    stylers: [{ visibility: 'on' }, { color: '#ffffff' }],
-  },
-  {
-    featureType: 'administrative.locality',
-    elementType: 'labels.text.stroke',
-    stylers: [{ visibility: 'on' }, { color: '#000000' }, { width: 2 }],
-  },
-  // Water - slightly lighter
-  {
-    featureType: 'water',
-    elementType: 'geometry',
-    stylers: [{ color: '#0d0d0d' }],
-  },
-  // Roads - subtle but visible
-  {
-    featureType: 'road',
-    elementType: 'geometry',
-    stylers: [{ color: '#1a1a1a' }],
-  },
-  // Road labels - show main streets only
-  {
-    featureType: 'road.arterial',
-    elementType: 'labels.text.fill',
-    stylers: [{ visibility: 'on' }, { color: '#666666' }],
-  },
-  {
-    featureType: 'road.arterial',
-    elementType: 'labels.text.stroke',
-    stylers: [{ visibility: 'on' }, { color: '#000000' }, { width: 2 }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'labels.text.fill',
-    stylers: [{ visibility: 'on' }, { color: '#888888' }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'labels.text.stroke',
-    stylers: [{ visibility: 'on' }, { color: '#000000' }, { width: 2 }],
-  },
-  // Hide local street labels (too cluttered)
-  {
-    featureType: 'road.local',
     elementType: 'labels',
     stylers: [{ visibility: 'off' }],
   },
-  // Hide ALL POIs (businesses, parks, etc)
+  // Hide ALL geometry strokes globally (prevents grid lines)
+  {
+    featureType: 'all',
+    elementType: 'geometry.stroke',
+    stylers: [{ visibility: 'off' }],
+  },
+  // Base landscape - dark uniform color
+  {
+    featureType: 'landscape',
+    elementType: 'geometry.fill',
+    stylers: [{ color: '#0a0a0a' }],
+  },
+  // Hide land parcels completely (major source of grid lines)
+  {
+    featureType: 'administrative.land_parcel',
+    stylers: [{ visibility: 'off' }],
+  },
+  // Hide administrative boundaries
+  {
+    featureType: 'administrative',
+    elementType: 'geometry',
+    stylers: [{ visibility: 'off' }],
+  },
+  // Water - slightly different shade
+  {
+    featureType: 'water',
+    elementType: 'geometry.fill',
+    stylers: [{ color: '#080808' }],
+  },
+  // Roads - subtle but visible, no stroke
+  {
+    featureType: 'road',
+    elementType: 'geometry.fill',
+    stylers: [{ color: '#1a1a1a' }],
+  },
+  // Highway geometry slightly brighter
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry.fill',
+    stylers: [{ color: '#222222' }],
+  },
+  // Hide ALL POIs
   {
     featureType: 'poi',
     stylers: [{ visibility: 'off' }],
@@ -87,16 +79,10 @@ const mapStyles: google.maps.MapTypeStyle[] = [
     featureType: 'transit',
     stylers: [{ visibility: 'off' }],
   },
-  // Minimal administrative boundaries
+  // Hide man-made landscape features (buildings etc can create grid)
   {
-    featureType: 'administrative',
+    featureType: 'landscape.man_made',
     elementType: 'geometry',
-    stylers: [{ color: '#1a1a1a' }],
-  },
-  // Hide other administrative labels
-  {
-    featureType: 'administrative.neighborhood',
-    elementType: 'labels',
     stylers: [{ visibility: 'off' }],
   },
 ]
@@ -404,20 +390,17 @@ export function InteractiveMap({
 
   return (
     <APIProvider apiKey={apiKey}>
-      <div className="relative w-full h-full">
+      <div className="relative w-full h-full bg-[#0a0a0a]">
         {/* Loading placeholder */}
         {!isMapLoaded && (
-          <div className="absolute inset-0 bg-background flex items-center justify-center z-50">
-            <div className="text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-secondary animate-pulse mx-auto" />
-              <p className="text-sm text-muted-foreground">Loading map...</p>
-            </div>
+          <div className="absolute inset-0 bg-[#0a0a0a] flex items-center justify-center z-50">
+            <ClubverseLoader size="md" />
           </div>
         )}
         
         <Map
           defaultCenter={mapConfig.center}
-          defaultZoom={mapConfig.zoom}
+          defaultZoom={Math.round(mapConfig.zoom)}
           gestureHandling="greedy"
           disableDefaultUI={true}
           zoomControl={false}
@@ -426,20 +409,15 @@ export function InteractiveMap({
           streetViewControl={false}
           clickableIcons={false}
           styles={mapStyles}
+          colorScheme="DARK"
+          renderingType="RASTER"
+          backgroundColor="#0a0a0a"
           onIdle={handleMapIdle}
           className="w-full h-full"
-          restriction={
-            mapConfig.restriction
-              ? {
-                  latLngBounds: mapConfig.restriction,
-                  strictBounds: false, // Allow panning outside bounds
-                }
-              : undefined
-          }
           draggable={true}
           scrollwheel={true}
-          minZoom={mapConfig.restriction ? 9 : undefined}
-          maxZoom={17}
+          minZoom={8}
+          maxZoom={18}
         >
           <MapLoadHandler 
             onMapLoad={handleMapLoad}

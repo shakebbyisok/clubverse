@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Loader2, Edit, Trash2, List, CreditCard, CheckCircle2, AlertCircle, Building2 } from 'lucide-react'
+import { Plus, Loader2, Edit, Trash2, List, CreditCard, CheckCircle2, AlertCircle, Building2, RefreshCw, Clock, XCircle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { clubsApi } from '@/lib/api/clubs'
 import { stripeConnectApi } from '@/lib/api/stripe-connect'
@@ -12,17 +12,8 @@ import { DataTable, Column } from '@/components/common/data-table'
 import { ClubFormModal } from '@/components/common/club-form-modal'
 import { ClubDrinkListsModal } from '@/components/common/club-drink-lists-modal'
 import { ClubLogo } from '@/components/common/club-logo'
+import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { cn } from '@/lib/utils'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 
 type SettingsViewMode = 'clubs' | 'payments'
 
@@ -38,6 +29,7 @@ export default function ClubSettingsPage() {
   const [drinkListCounts, setDrinkListCounts] = useState<Record<string, number>>({})
   const [stripeStatus, setStripeStatus] = useState<any>(null)
   const [isLoadingStripe, setIsLoadingStripe] = useState(false)
+  const [isRefreshingStripe, setIsRefreshingStripe] = useState(false)
   const [viewMode, setViewMode] = useState<SettingsViewMode>('clubs')
 
   const loadStripeStatus = useCallback(async () => {
@@ -88,14 +80,58 @@ export default function ClubSettingsPage() {
     // Check if returning from Stripe onboarding
     const urlParams = new URLSearchParams(window.location.search)
     if (urlParams.get('stripe_return') === 'true' || urlParams.get('stripe_refresh') === 'true') {
-      // Reload status after returning from Stripe
-      setTimeout(() => {
-        loadStripeStatus()
-        // Clean up URL
-        window.history.replaceState({}, '', window.location.pathname)
-      }, 1000)
+      // Reload status multiple times after returning from Stripe (verification can take a moment)
+      const refreshIntervals = [1000, 3000, 6000]
+      refreshIntervals.forEach(delay => {
+        setTimeout(() => {
+          loadStripeStatus()
+        }, delay)
+      })
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname)
     }
   }, [loadClubs, loadStripeStatus])
+
+  const handleRefreshStripeStatus = async () => {
+    setIsRefreshingStripe(true)
+    try {
+      const status = await stripeConnectApi.refreshStatus()
+      setStripeStatus(status)
+      toast({
+        title: 'Status updated',
+        description: 'Stripe account status has been refreshed.',
+      })
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to refresh status',
+      })
+    } finally {
+      setIsRefreshingStripe(false)
+    }
+  }
+
+  const handleDisconnectStripe = async () => {
+    if (!confirm('Are you sure you want to disconnect Stripe? You can reconnect with a different account.')) {
+      return
+    }
+    
+    try {
+      await stripeConnectApi.disconnect()
+      setStripeStatus(null)
+      toast({
+        title: 'Stripe disconnected',
+        description: 'You can now connect a different Stripe account.',
+      })
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.response?.data?.detail || 'Failed to disconnect',
+      })
+    }
+  }
 
   const handleStripeOnboard = async () => {
     try {
@@ -128,25 +164,28 @@ export default function ClubSettingsPage() {
     setIsModalOpen(true)
   }
 
+  const [isDeleting, setIsDeleting] = useState(false)
+
   const handleDelete = async () => {
     if (!deletingClub) return
 
+    setIsDeleting(true)
     try {
-      // TODO: Add delete endpoint to API
-      // await clubsApi.deleteClub(deletingClub.id)
+      await clubsApi.deleteClub(deletingClub.id)
       toast({
-        variant: 'destructive',
-        title: 'Not implemented',
-        description: 'Delete functionality will be added soon',
+        title: 'Club deleted',
+        description: `"${deletingClub.name}" has been permanently deleted.`,
       })
       setDeletingClub(null)
-      // loadClubs()
+      loadClubs()
     } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Error',
         description: error.response?.data?.detail || 'Failed to delete club',
       })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -369,67 +408,144 @@ export default function ClubSettingsPage() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading status...
                 </div>
-              ) : stripeStatus?.stripe_account_status === 'active' ? (
-                  <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    {/* Stripe Logo */}
-                    <img 
-                      src="/assets/stripelogo.png" 
-                      alt="Stripe" 
-                      className="h-5 w-auto"
-                    />
-                    <div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold">Stripe Connected</span>
-                      <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">Ready to accept payments</p>
-                    </div>
-                  </div>
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 font-medium">
-                    Active
-                  </span>
-                </div>
               ) : (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    {/* Stripe Logo */}
-                    <img 
-                      src="/assets/stripelogo.png" 
-                      alt="Stripe" 
-                      className="h-5 w-auto"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold">Payment Processing</span>
-                        {stripeStatus?.stripe_account_status === 'pending' && (
-                          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                        )}
+                <div className="space-y-4">
+                  {/* Main Status Row */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <img 
+                        src="/assets/stripelogo.png" 
+                        alt="Stripe" 
+                        className="h-5 w-auto"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold">
+                            {stripeStatus?.stripe_account_status === 'active' 
+                              ? 'Stripe Connected'
+                              : stripeStatus?.stripe_account_status === 'pending_verification'
+                              ? 'Verification in Progress'
+                              : stripeStatus?.stripe_account_status === 'pending'
+                              ? 'Setup Incomplete'
+                              : stripeStatus?.stripe_account_status === 'restricted'
+                              ? 'Account Restricted'
+                              : 'Payment Processing'}
+                          </span>
+                          {stripeStatus?.stripe_account_status === 'active' && (
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          )}
+                          {stripeStatus?.stripe_account_status === 'pending_verification' && (
+                            <Clock className="h-4 w-4 text-amber-500" />
+                          )}
+                          {stripeStatus?.stripe_account_status === 'pending' && (
+                            <AlertCircle className="h-4 w-4 text-amber-500" />
+                          )}
+                          {(stripeStatus?.stripe_account_status === 'restricted' || stripeStatus?.stripe_account_status === 'invalid') && (
+                            <XCircle className="h-4 w-4 text-red-500" />
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {stripeStatus?.stripe_account_status === 'active' 
+                            ? 'Ready to accept card payments'
+                            : stripeStatus?.stripe_account_status === 'pending_verification'
+                            ? 'Stripe is verifying your account (usually takes a few minutes)'
+                            : stripeStatus?.stripe_account_status === 'pending'
+                            ? 'Complete Stripe onboarding to accept payments'
+                            : stripeStatus?.stripe_account_status === 'restricted'
+                            ? 'Your account has restrictions. Please contact Stripe support.'
+                            : 'Connect Stripe to accept card payments'}
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                      {stripeStatus?.stripe_account_status === 'pending'
-                          ? 'Setup in progress'
-                          : 'Connect Stripe to accept payments'}
-                      </p>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {/* Refresh button */}
+                      {stripeStatus?.stripe_account_id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRefreshStripeStatus}
+                          disabled={isRefreshingStripe}
+                          className="h-8 w-8 p-0"
+                          title="Refresh status"
+                        >
+                          <RefreshCw className={cn("h-4 w-4", isRefreshingStripe && "animate-spin")} />
+                        </Button>
+                      )}
+                      
+                      {/* Status badge or action button */}
+                      {stripeStatus?.stripe_account_status === 'active' ? (
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 font-medium">
+                          Active
+                        </span>
+                      ) : stripeStatus?.stripe_account_status === 'pending_verification' ? (
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            onClick={handleStripeOnboard} 
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7"
+                          >
+                            Update Info
+                          </Button>
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-medium">
+                            Verifying
+                          </span>
+                        </div>
+                      ) : (
+                        <Button 
+                          onClick={handleStripeOnboard} 
+                          size="sm"
+                          className="gap-2 bg-[#635BFF] hover:bg-[#5851EA] text-white"
+                        >
+                          {stripeStatus?.stripe_account_status === 'pending' ? (
+                            <>Complete Setup</>
+                          ) : stripeStatus?.stripe_account_status === 'restricted' || stripeStatus?.stripe_account_status === 'invalid' ? (
+                            <>Fix Issues</>
+                          ) : (
+                            <>
+                              <CreditCard className="h-3.5 w-3.5" />
+                              Connect
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
-                  <Button 
-                    onClick={handleStripeOnboard} 
-                    size="sm"
-                    className="gap-2 bg-[#635BFF] hover:bg-[#5851EA] text-white"
-                  >
-                    {stripeStatus?.stripe_account_status === 'pending' ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Complete Setup
-                      </>
-                    ) : (
-                      <>
-                        <CreditCard className="h-3.5 w-3.5" />
-                        Connect
-                      </>
-                    )}
-                  </Button>
+
+                  {/* Detailed Status (when connected) */}
+                  {stripeStatus?.stripe_account_id && (
+                    <div className="pt-3 border-t border-border/40">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-6 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <div className={cn(
+                              "h-2 w-2 rounded-full",
+                              stripeStatus?.stripe_charges_enabled ? "bg-green-500" : "bg-amber-500"
+                            )} />
+                            <span className="text-muted-foreground">
+                              Card Payments: {stripeStatus?.stripe_charges_enabled ? 'Enabled' : 'Pending'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className={cn(
+                              "h-2 w-2 rounded-full",
+                              stripeStatus?.stripe_payouts_enabled ? "bg-green-500" : "bg-amber-500"
+                            )} />
+                            <span className="text-muted-foreground">
+                              Payouts: {stripeStatus?.stripe_payouts_enabled ? 'Enabled' : 'Pending'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleDisconnectStripe}
+                          className="text-xs text-muted-foreground hover:text-red-500 transition-colors"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -456,25 +572,20 @@ export default function ClubSettingsPage() {
       )}
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deletingClub} onOpenChange={(open) => !open && setDeletingClub(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Club</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete &quot;{deletingClub?.name}&quot;? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={!!deletingClub}
+        onOpenChange={(open) => !open && setDeletingClub(null)}
+        title="Delete Club"
+        description={
+          <>
+            Are you sure you want to delete <span className="font-medium text-foreground">{deletingClub?.name}</span>? This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        isLoading={isDeleting}
+        variant="destructive"
+      />
     </div>
   )
 }

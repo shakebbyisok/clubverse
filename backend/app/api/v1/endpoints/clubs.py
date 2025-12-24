@@ -129,6 +129,40 @@ async def update_club(
     return ClubResponse.model_validate(club)
 
 
+@router.delete("/{club_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_club(
+    club_id: str,
+    current_user: User = Depends(get_current_club_owner),
+    db: Session = Depends(get_db)
+):
+    """Delete a club (club owner only). This will also delete all associated drinks."""
+    from uuid import UUID
+    try:
+        club_uuid = UUID(club_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid club ID format",
+        )
+    
+    club = db.query(Club).filter(Club.id == club_uuid, Club.owner_id == current_user.id).first()
+    
+    if not club:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Club not found or you don't have permission",
+        )
+    
+    # Delete associated drinks first
+    db.query(Drink).filter(Drink.club_id == club_uuid).delete()
+    
+    # Delete the club
+    db.delete(club)
+    db.commit()
+    
+    return None
+
+
 @router.get("", response_model=List[ClubResponse])
 def list_clubs(
     skip: int = 0,
@@ -165,8 +199,16 @@ def get_club(club_id: str, db: Session = Depends(get_db)):
 # Drink endpoints
 @router.get("/{club_id}/drinks", response_model=List[DrinkResponse])
 def list_drinks(club_id: str, db: Session = Depends(get_db)):
-    """List all drinks for a club."""
+    """List all drinks for a club with category information.
+    
+    This includes:
+    1. Drinks directly created for this club (club_id matches)
+    2. Drinks from drink lists that are associated with this club
+    """
     from uuid import UUID
+    from sqlalchemy.orm import joinedload
+    from sqlalchemy import or_
+    
     try:
         club_uuid = UUID(club_id)
     except ValueError:
@@ -174,8 +216,54 @@ def list_drinks(club_id: str, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid club ID format",
         )
-    drinks = db.query(Drink).filter(Drink.club_id == club_uuid, Drink.is_available == True).all()
-    return [DrinkResponse.model_validate(drink) for drink in drinks]
+    
+    # Get the club to access its associated drink lists
+    club = db.query(Club).filter(Club.id == club_uuid).first()
+    if not club:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Club not found",
+        )
+    
+    # Collect all drink IDs from associated drink lists
+    drink_ids_from_lists = set()
+    for drink_list in club.drink_lists:
+        for drink in drink_list.drinks:
+            drink_ids_from_lists.add(drink.id)
+    
+    # Query drinks that either:
+    # 1. Have club_id matching this club (directly created for this club)
+    # 2. Are in the drink_ids_from_lists (from associated drink lists)
+    if drink_ids_from_lists:
+        drinks = (
+            db.query(Drink)
+            .options(joinedload(Drink.category_obj))
+            .filter(
+                or_(
+                    Drink.club_id == club_uuid,
+                    Drink.id.in_(drink_ids_from_lists)
+                )
+            )
+            .all()
+        )
+    else:
+        # No associated drink lists, just get drinks directly for this club
+        drinks = (
+            db.query(Drink)
+            .options(joinedload(Drink.category_obj))
+            .filter(Drink.club_id == club_uuid)
+            .all()
+        )
+    
+    # Remove duplicates (in case a drink is both directly in club AND in a list)
+    seen_ids = set()
+    unique_drinks = []
+    for drink in drinks:
+        if drink.id not in seen_ids:
+            seen_ids.add(drink.id)
+            unique_drinks.append(drink)
+    
+    return [DrinkResponse.model_validate(drink) for drink in unique_drinks]
 
 
 @router.get("/{club_id}/drink-lists", response_model=List[str])
@@ -218,8 +306,10 @@ def create_drink(
 ):
     """
     Add a new drink to club (club owner only).
+    Supports category_id for linking to categories.
     """
     from uuid import UUID
+    from sqlalchemy.orm import joinedload
     from app.core.brand_logos import get_logo_url
     
     try:
@@ -247,12 +337,24 @@ def create_drink(
         if logo_url:
             image_url = logo_url
     
+    # Parse category_id if provided
+    category_uuid = None
+    if drink_data.category_id:
+        try:
+            category_uuid = UUID(drink_data.category_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid category ID format",
+            )
+    
     db_drink = Drink(
         club_id=club_uuid,
         name=drink_data.name,
         description=drink_data.description,
         price=drink_data.price,
         category=drink_data.category,
+        category_id=category_uuid,
         image_url=image_url,
         brand_name=drink_data.brand_name,
         brand_colors=drink_data.brand_colors,
@@ -262,7 +364,14 @@ def create_drink(
     
     db.add(db_drink)
     db.commit()
-    db.refresh(db_drink)
+    
+    # Reload with category relationship for response
+    db_drink = (
+        db.query(Drink)
+        .options(joinedload(Drink.category_obj))
+        .filter(Drink.id == db_drink.id)
+        .first()
+    )
     
     return DrinkResponse.model_validate(db_drink)
 
@@ -274,8 +383,10 @@ def update_drink(
     current_user: User = Depends(get_current_club_owner),
     db: Session = Depends(get_db)
 ):
-    """Update a drink (club owner only)."""
+    """Update a drink (club owner only). Supports category_id for linking to categories."""
     from uuid import UUID
+    from sqlalchemy.orm import joinedload
+    
     try:
         drink_uuid = UUID(drink_id)
     except ValueError:
@@ -295,11 +406,33 @@ def update_drink(
         )
     
     update_data = drink_data.dict(exclude_unset=True)
+    
+    # Handle category_id specially - convert to UUID
+    if 'category_id' in update_data:
+        cat_id = update_data['category_id']
+        if cat_id:
+            try:
+                update_data['category_id'] = UUID(cat_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid category ID format",
+                )
+        else:
+            update_data['category_id'] = None
+    
     for field, value in update_data.items():
         setattr(drink, field, value)
     
     db.commit()
-    db.refresh(drink)
+    
+    # Reload with category relationship for response
+    drink = (
+        db.query(Drink)
+        .options(joinedload(Drink.category_obj))
+        .filter(Drink.id == drink_uuid)
+        .first()
+    )
     
     return DrinkResponse.model_validate(drink)
 

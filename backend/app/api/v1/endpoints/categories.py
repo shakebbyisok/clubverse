@@ -30,6 +30,37 @@ def get_category_service(db: Session = Depends(get_db)) -> CategoryService:
     return CategoryService()
 
 
+def _category_to_response(cat) -> CategoryResponse:
+    """Helper to convert Category model to CategoryResponse schema"""
+    subcategories = [
+        SubcategoryResponse(
+            id=str(sub.id),
+            category_id=str(sub.category_id),
+            name=sub.name,
+            description=sub.description,
+            display_order=sub.display_order,
+            is_active=sub.is_active,
+            created_at=sub.created_at,
+            updated_at=sub.updated_at
+        )
+        for sub in cat.subcategories if sub.is_active
+    ]
+    
+    return CategoryResponse(
+        id=str(cat.id),
+        club_id=str(cat.club_id) if cat.club_id else None,
+        name=cat.name,
+        description=cat.description,
+        icon=cat.icon,
+        display_order=cat.display_order,
+        is_system=cat.is_system,
+        is_active=cat.is_active,
+        subcategories=subcategories,
+        created_at=cat.created_at,
+        updated_at=cat.updated_at
+    )
+
+
 @router.get("/clubs/{club_id}/categories", response_model=CategoryTreeResponse)
 def get_club_categories(
     club_id: str,
@@ -37,7 +68,13 @@ def get_club_categories(
     db: Session = Depends(get_db),
     category_service: CategoryService = Depends(get_category_service)
 ):
-    """Get all categories for a club with subcategories"""
+    """
+    Get all categories for a club (both system and custom).
+    
+    Returns:
+        - system_categories: Predefined categories shared across all clubs
+        - custom_categories: Club-specific categories created by the owner
+    """
     try:
         club_uuid = UUID(club_id)
     except ValueError:
@@ -59,40 +96,16 @@ def get_club_categories(
         # Allow public read for now, can restrict later
         pass
 
-    categories = category_service.get_club_categories(club_uuid, db)
+    # Ensure system categories exist
+    category_service.ensure_system_categories_exist(db)
     
-    # Convert to response format
-    category_responses = []
-    for cat in categories:
-        subcategories = [
-            SubcategoryResponse(
-                id=str(sub.id),
-                category_id=str(sub.category_id),
-                name=sub.name,
-                description=sub.description,
-                display_order=sub.display_order,
-                is_active=sub.is_active,
-                created_at=sub.created_at,
-                updated_at=sub.updated_at
-            )
-            for sub in cat.subcategories if sub.is_active
-        ]
-        
-        category_responses.append(
-            CategoryResponse(
-                id=str(cat.id),
-                club_id=str(cat.club_id),
-                name=cat.name,
-                description=cat.description,
-                display_order=cat.display_order,
-                is_active=cat.is_active,
-                subcategories=subcategories,
-                created_at=cat.created_at,
-                updated_at=cat.updated_at
-            )
-        )
-
-    return CategoryTreeResponse(categories=category_responses)
+    # Get both system and custom categories
+    system_cats, custom_cats = category_service.get_all_categories_for_club(club_uuid, db)
+    
+    return CategoryTreeResponse(
+        system_categories=[_category_to_response(cat) for cat in system_cats],
+        custom_categories=[_category_to_response(cat) for cat in custom_cats]
+    )
 
 
 @router.post("/clubs/{club_id}/categories", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
@@ -103,7 +116,7 @@ def create_category(
     db: Session = Depends(get_db),
     category_service: CategoryService = Depends(get_category_service)
 ):
-    """Create a new category (club owner only)"""
+    """Create a new custom category for a club (club owner only)"""
     try:
         club_uuid = UUID(club_id)
     except ValueError:
@@ -126,20 +139,11 @@ def create_category(
             category_data.name,
             db,
             description=category_data.description,
+            icon=category_data.icon,
             display_order=category_data.display_order
         )
 
-        return CategoryResponse(
-            id=str(category.id),
-            club_id=str(category.club_id),
-            name=category.name,
-            description=category.description,
-            display_order=category.display_order,
-            is_active=category.is_active,
-            subcategories=[],
-            created_at=category.created_at,
-            updated_at=category.updated_at
-        )
+        return _category_to_response(category)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -213,7 +217,7 @@ def update_category(
     db: Session = Depends(get_db),
     category_service: CategoryService = Depends(get_category_service)
 ):
-    """Update a category (club owner only)"""
+    """Update a custom category (club owner only). System categories cannot be modified."""
     try:
         cat_uuid = UUID(category_id)
     except ValueError:
@@ -227,6 +231,13 @@ def update_category(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found"
+        )
+
+    # System categories cannot be modified
+    if category.is_system:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="System categories cannot be modified"
         )
 
     club = db.query(Club).filter(Club.id == category.club_id, Club.owner_id == current_user.id).first()
@@ -236,45 +247,28 @@ def update_category(
             detail="You don't have permission to modify this category"
         )
 
-    updated = category_service.update_category(
-        cat_uuid,
-        db,
-        name=category_data.name,
-        description=category_data.description,
-        display_order=category_data.display_order
-    )
+    try:
+        updated = category_service.update_category(
+            cat_uuid,
+            db,
+            name=category_data.name,
+            description=category_data.description,
+            icon=category_data.icon,
+            display_order=category_data.display_order
+        )
 
-    if not updated:
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Category not found"
+            )
+
+        return _category_to_response(updated)
+    except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Category not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
         )
-
-    subcategories = [
-        SubcategoryResponse(
-            id=str(sub.id),
-            category_id=str(sub.category_id),
-            name=sub.name,
-            description=sub.description,
-            display_order=sub.display_order,
-            is_active=sub.is_active,
-            created_at=sub.created_at,
-            updated_at=sub.updated_at
-        )
-        for sub in updated.subcategories if sub.is_active
-    ]
-
-    return CategoryResponse(
-        id=str(updated.id),
-        club_id=str(updated.club_id),
-        name=updated.name,
-        description=updated.description,
-        display_order=updated.display_order,
-        is_active=updated.is_active,
-        subcategories=subcategories,
-        created_at=updated.created_at,
-        updated_at=updated.updated_at
-    )
 
 
 @router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -284,7 +278,7 @@ def delete_category(
     db: Session = Depends(get_db),
     category_service: CategoryService = Depends(get_category_service)
 ):
-    """Delete a category (club owner only)"""
+    """Delete a custom category (club owner only). System categories cannot be deleted."""
     try:
         cat_uuid = UUID(category_id)
     except ValueError:
@@ -300,6 +294,13 @@ def delete_category(
             detail="Category not found"
         )
 
+    # System categories cannot be deleted
+    if category.is_system:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="System categories cannot be deleted"
+        )
+
     club = db.query(Club).filter(Club.id == category.club_id, Club.owner_id == current_user.id).first()
     if not club:
         raise HTTPException(
@@ -307,10 +308,16 @@ def delete_category(
             detail="You don't have permission to delete this category"
         )
 
-    success = category_service.delete_category(cat_uuid, db)
-    if not success:
+    try:
+        success = category_service.delete_category(cat_uuid, db)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Category not found"
+            )
+    except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Category not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
         )
 

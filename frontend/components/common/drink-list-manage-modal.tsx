@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { migrateImagePath } from '@/lib/utils/image-path'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Loader2 as Loader2Icon } from 'lucide-react'
 
 interface DrinkListManageModalProps {
   open: boolean
@@ -43,6 +44,7 @@ export function DrinkListManageModal({
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDrinkIds, setSelectedDrinkIds] = useState<Set<string>>(new Set())
   const [clubId, setClubId] = useState<string | null>(null)
+  const [togglingDrinkId, setTogglingDrinkId] = useState<string | null>(null)
 
   // Fetch list details and available drinks when modal opens
   useEffect(() => {
@@ -96,10 +98,72 @@ export function DrinkListManageModal({
     const query = searchQuery.toLowerCase()
     return (
       drink.name.toLowerCase().includes(query) ||
+      drink.category_name?.toLowerCase().includes(query) ||
       drink.category?.toLowerCase().includes(query) ||
       drink.description?.toLowerCase().includes(query)
     )
   })
+
+  // Handle availability toggle with optimistic updates
+  const handleToggleAvailability = async (drink: Drink) => {
+    const newStatus = !drink.is_available
+    const drinkId = drink.id
+    
+    // Optimistic update - update UI immediately
+    setAvailableDrinks(prevDrinks => 
+      prevDrinks.map(d => 
+        d.id === drinkId ? { ...d, is_available: newStatus } : d
+      )
+    )
+    
+    // Also update in listWithDrinks if present
+    if (listWithDrinks) {
+      setListWithDrinks({
+        ...listWithDrinks,
+        drinks: listWithDrinks.drinks.map(d => 
+          d.id === drinkId ? { ...d, is_available: newStatus } : d
+        )
+      })
+    }
+    
+    setTogglingDrinkId(drinkId)
+    
+    try {
+      await drinksApi.update(drinkId, {
+        is_available: newStatus,
+      })
+      
+      toast({
+        title: 'Updated',
+        description: `${drink.name} is now ${newStatus ? 'available' : 'unavailable'}`,
+        duration: 2000,
+      })
+    } catch (error: any) {
+      // Revert on error
+      setAvailableDrinks(prevDrinks => 
+        prevDrinks.map(d => 
+          d.id === drinkId ? { ...d, is_available: !newStatus } : d
+        )
+      )
+      
+      if (listWithDrinks) {
+        setListWithDrinks({
+          ...listWithDrinks,
+          drinks: listWithDrinks.drinks.map(d => 
+            d.id === drinkId ? { ...d, is_available: !newStatus } : d
+          )
+        })
+      }
+      
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update availability',
+      })
+    } finally {
+      setTogglingDrinkId(null)
+    }
+  }
 
   // Toggle drink selection
   const toggleDrinkSelection = (drinkId: string) => {
@@ -223,9 +287,9 @@ export function DrinkListManageModal({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium truncate">{drink.name}</span>
-                          {drink.category && (
+                          {drink.category_name && (
                             <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                              {drink.category}
+                              {drink.category_name}
                             </Badge>
                           )}
                         </div>
@@ -240,12 +304,37 @@ export function DrinkListManageModal({
                           )}
                         </div>
                       </div>
-                      <Badge
-                        variant={drink.is_available ? 'default' : 'secondary'}
-                        className="text-xs px-2 py-0.5"
-                      >
-                        {drink.is_available ? 'Available' : 'Unavailable'}
-                      </Badge>
+                      {(() => {
+                        const isToggling = togglingDrinkId === drink.id
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleToggleAvailability(drink)
+                            }}
+                            disabled={isToggling}
+                            className={cn(
+                              'text-xs px-2 py-1 rounded-full transition-all cursor-pointer relative',
+                              'hover:opacity-80 active:scale-95 disabled:opacity-50 disabled:cursor-wait',
+                              'ring-2 ring-transparent',
+                              drink.is_available 
+                                ? 'bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15' 
+                                : 'bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/15',
+                              isToggling && 'ring-primary/50 animate-pulse'
+                            )}
+                            title={`Click to mark as ${drink.is_available ? 'unavailable' : 'available'}`}
+                          >
+                            {isToggling ? (
+                              <span className="flex items-center gap-1.5">
+                                <Loader2Icon className="h-3 w-3 animate-spin" />
+                                <span>Updating...</span>
+                              </span>
+                            ) : (
+                              drink.is_available ? 'Available' : 'Unavailable'
+                            )}
+                          </button>
+                        )
+                      })()}
                     </div>
                   )
                 })

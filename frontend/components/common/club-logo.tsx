@@ -25,7 +25,7 @@ export function ClubLogo({
     return (
       <div
         className={cn(
-          'rounded-[var(--radius)] border border-border/40 flex items-center justify-center bg-muted/20',
+          'rounded-lg border border-border/40 flex items-center justify-center bg-muted/20',
           containerClassName
         )}
         style={{ width: size, height: size }}
@@ -35,37 +35,55 @@ export function ClubLogo({
     )
   }
 
-  // Settings are stored for 64x64 container, scale proportionally for different sizes
-  const BASE_SIZE = 64
-  const scale = size / BASE_SIZE
+  // Simple display - just show the logo with rounded corners, no positioning magic
+  // If logoSettings exist and have custom positioning, use them; otherwise just center-fill
+  const hasCustomSettings = logoSettings?.width && logoSettings?.height
 
-  // Calculate logo dimensions and position from settings
-  // If no settings, center the logo
-  const logoWidth = logoSettings?.width ? logoSettings.width * scale : size * 0.75
-  const logoHeight = logoSettings?.height ? logoSettings.height * scale : size * 0.75
-  const logoX = logoSettings?.x ? logoSettings.x * scale : (size - logoWidth) / 2
-  const logoY = logoSettings?.y ? logoSettings.y * scale : (size - logoHeight) / 2
+  if (hasCustomSettings) {
+    // Settings are stored for 64x64 container, scale proportionally for different sizes
+    const BASE_SIZE = 64
+    const scale = size / BASE_SIZE
 
+    const logoWidth = logoSettings.width! * scale
+    const logoHeight = logoSettings.height! * scale
+    const logoX = logoSettings.x ? logoSettings.x * scale : (size - logoWidth) / 2
+    const logoY = logoSettings.y ? logoSettings.y * scale : (size - logoHeight) / 2
+
+    return (
+      <div
+        className={cn(
+          'rounded-lg overflow-hidden relative flex-shrink-0',
+          containerClassName
+        )}
+        style={{ width: size, height: size }}
+      >
+        <img
+          src={logoUrl}
+          alt={alt}
+          className={cn('absolute object-contain', className)}
+          style={{
+            left: `${logoX}px`,
+            top: `${logoY}px`,
+            width: `${Math.min(logoWidth, size)}px`,
+            height: `${Math.min(logoHeight, size)}px`,
+          }}
+        />
+      </div>
+    )
+  }
+
+  // Default: simple rounded image that fills the container
   return (
-    <div
+    <img
+      src={logoUrl}
+      alt={alt}
       className={cn(
-        'rounded-[var(--radius)] border border-border/40 bg-background overflow-hidden relative',
-        containerClassName
+        'rounded-lg object-cover flex-shrink-0',
+        containerClassName,
+        className
       )}
       style={{ width: size, height: size }}
-    >
-      <img
-        src={logoUrl}
-        alt={alt}
-        className={cn('absolute object-contain', className)}
-        style={{
-          left: `${logoX}px`,
-          top: `${logoY}px`,
-          width: `${Math.min(logoWidth, size)}px`,
-          height: `${Math.min(logoHeight, size)}px`,
-        }}
-      />
-    </div>
+    />
   )
 }
 

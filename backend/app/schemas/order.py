@@ -53,6 +53,8 @@ class OrderBase(BaseModel):
 
 class OrderCreate(OrderBase):
     payment_method: PaymentMethod = PaymentMethod.CARD
+    success_url: Optional[str] = None  # For card payments - redirect after success
+    cancel_url: Optional[str] = None   # For card payments - redirect if cancelled
 
 
 class OrderResponse(BaseModel):
@@ -65,6 +67,7 @@ class OrderResponse(BaseModel):
     status: OrderStatus
     qr_code: Optional[str] = None
     payment_intent_id: Optional[str] = None
+    checkout_url: Optional[str] = None  # Stripe Checkout URL for card payments
     items: List[OrderItemResponse]
     created_at: datetime
     updated_at: Optional[datetime] = None

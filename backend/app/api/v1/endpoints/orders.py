@@ -10,7 +10,7 @@ from app.models.drink import Drink
 from app.models.order import Order, OrderItem, OrderStatus, PaymentMethod
 from app.schemas.order import OrderCreate, OrderResponse, OrderItemResponse, OrderStatusUpdate
 from app.core.dependencies import get_current_user
-from app.core.stripe_service import create_payment_intent
+from app.core.stripe_service import create_checkout_session
 from app.core.qr_service import generate_qr_code
 
 router = APIRouter()
@@ -75,12 +75,17 @@ def create_order(
     # Handle payment method
     payment_method = order_data.payment_method
     
-    # For card payments, verify Stripe account is set up
+    # For card payments, verify Stripe account is set up and can accept charges
     if payment_method == PaymentMethod.CARD:
-        if not club.owner.stripe_account_id or club.owner.stripe_account_status != "active":
+        if not club.owner.stripe_account_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Club owner has not set up payment processing. Please contact the club.",
+                detail="This venue hasn't set up card payments yet. Please pay at the bar.",
+            )
+        if not club.owner.stripe_charges_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Card payments are being set up for this venue. Please pay at the bar.",
             )
     
     # Create order with pending_payment status first
@@ -96,12 +101,20 @@ def create_order(
     db.flush()  # Get order ID
     
     # Handle payment based on payment method
-    payment_intent = None
+    checkout_session = None
     if payment_method == PaymentMethod.CARD:
-        # Create payment intent with Stripe Connect passthrough
-        payment_intent = create_payment_intent(
+        # Build items description
+        items_desc = ", ".join([f"{item['quantity']}x {item['drink'].name}" for item in order_items_data])
+        
+        # Create Stripe Checkout Session
+        checkout_session = create_checkout_session(
             amount=int(total_amount * 100),  # Convert to cents
             currency="usd",
+            order_id=str(db_order.id),
+            club_name=club.name,
+            items_description=items_desc,
+            success_url=order_data.success_url or "https://clubverse.app/order/success?order_id={CHECKOUT_SESSION_ID}",
+            cancel_url=order_data.cancel_url or "https://clubverse.app/order/cancelled",
             metadata={
                 "customer_id": str(current_user.id),
                 "club_id": str(club.id),
@@ -109,8 +122,8 @@ def create_order(
             },
             stripe_account_id=club.owner.stripe_account_id
         )
-        # Update order with payment intent ID
-        db_order.payment_intent_id = payment_intent.id
+        # Store checkout session ID for tracking
+        db_order.payment_intent_id = checkout_session.id
     else:
         # Cash payment - generate QR code immediately
         qr_code = generate_qr_code()
@@ -159,9 +172,9 @@ def create_order(
     order_dict["items"] = items
     order_dict["club_name"] = club.name
     
-    # Return client secret only for card payments
-    if payment_method == PaymentMethod.CARD and payment_intent:
-        order_dict["payment_intent_id"] = payment_intent.client_secret
+    # Return checkout URL for card payments
+    if payment_method == PaymentMethod.CARD and checkout_session:
+        order_dict["checkout_url"] = checkout_session.url
     
     return OrderResponse(**order_dict)
 
@@ -197,6 +210,61 @@ def get_order(
         )
     
     # Load items with drink names - convert UUIDs to strings explicitly
+    order_dict = {
+        'id': str(order.id),
+        'customer_id': str(order.customer_id),
+        'club_id': str(order.club_id),
+        'total_amount': order.total_amount,
+        'payment_method': order.payment_method,
+        'status': order.status,
+        'qr_code': order.qr_code,
+        'payment_intent_id': order.payment_intent_id,
+        'created_at': order.created_at,
+        'updated_at': order.updated_at,
+        'completed_at': order.completed_at,
+    }
+    
+    items = []
+    for item in order.items:
+        drink = db.query(Drink).filter(Drink.id == item.drink_id).first()
+        item_dict = {
+            'id': str(item.id),
+            'drink_id': str(item.drink_id),
+            'quantity': item.quantity,
+            'price_at_purchase': item.price_at_purchase,
+            'drink_name': drink.name if drink else None,
+        }
+        items.append(item_dict)
+    
+    order_dict["items"] = items
+    order_dict["club_name"] = order.club.name if order.club else None
+    
+    return OrderResponse(**order_dict)
+
+
+@router.get("/session/{session_id}", response_model=OrderResponse)
+def get_order_by_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get order by Stripe session ID (for success page after payment)."""
+    order = db.query(Order).filter(Order.payment_intent_id == session_id).first()
+    
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found",
+        )
+    
+    # Only owner can view their order
+    if order.customer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this order",
+        )
+    
+    # Build response
     order_dict = {
         'id': str(order.id),
         'customer_id': str(order.customer_id),

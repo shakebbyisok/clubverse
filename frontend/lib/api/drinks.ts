@@ -3,7 +3,9 @@ import { apiClient } from './client'
 export interface DrinkPreview {
   name: string
   price: number
-  category?: string | null
+  category?: string | null  // Text category name
+  category_id?: string | null  // Matched system/custom category ID
+  category_icon?: string | null  // Category emoji icon
   brand_name?: string | null
   logo_url?: string | null
 }
@@ -15,7 +17,8 @@ export interface ParsePreviewResponse {
 export interface BatchDrinkCreate {
   name: string
   price: number
-  category?: string | null
+  category?: string | null  // Text category name
+  category_id?: string | null  // System/custom category ID
   brand_name?: string | null
   logo_url?: string | null
 }
@@ -26,7 +29,10 @@ export interface Drink {
   name: string
   description?: string | null
   price: string
-  category?: string | null
+  category?: string | null  // Legacy text category
+  category_id?: string | null  // FK to categories table
+  category_name?: string | null  // Resolved category name
+  category_icon?: string | null  // Resolved category emoji icon
   image_url?: string | null
   brand_name?: string | null
   brand_colors?: any[] | null
@@ -65,6 +71,14 @@ export const drinksApi = {
    */
   getClubDrinks: async (clubId: string): Promise<Drink[]> => {
     const response = await apiClient.get<Drink[]>(`/clubs/${clubId}/drinks`)
+    return response.data
+  },
+
+  /**
+   * Update a drink
+   */
+  update: async (drinkId: string, data: Partial<Drink>): Promise<Drink> => {
+    const response = await apiClient.put<Drink>(`/clubs/drinks/${drinkId}`, data)
     return response.data
   },
 

@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Users, Loader2, Trash2 } from 'lucide-react'
+import { Plus, Users, Loader2, Edit2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import {
   Table,
@@ -17,6 +17,7 @@ import { Bartender } from '@/types'
 import { bartendersApi } from '@/lib/api/bartenders'
 import { clubsApi } from '@/lib/api/clubs'
 import { BartenderFormModal } from '@/components/common/bartender-form-modal'
+import { BartenderEditModal } from '@/components/common/bartender-edit-modal'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -26,15 +27,36 @@ export default function BartendersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [clubId, setClubId] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingBartender, setEditingBartender] = useState<Bartender | null>(null)
 
   // Fetch club ID and bartenders
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const club = await clubsApi.getMyClub()
-        if (club?.id) {
-          setClubId(club.id)
-          const data = await bartendersApi.getByClub(club.id)
+        // Get selected club from localStorage (set by club selector)
+        const savedClubId = localStorage.getItem('selectedClubId')
+        
+        let targetClubId: string | null = null
+        
+        if (savedClubId) {
+          // Verify club exists and user owns it
+          try {
+            const club = await clubsApi.getClub(savedClubId)
+            targetClubId = club.id
+          } catch {
+            // Club not found or not owned, fall back to getMyClub
+            const club = await clubsApi.getMyClub()
+            targetClubId = club?.id || null
+          }
+        } else {
+          // No saved club, use getMyClub
+          const club = await clubsApi.getMyClub()
+          targetClubId = club?.id || null
+        }
+        
+        if (targetClubId) {
+          setClubId(targetClubId)
+          const data = await bartendersApi.getByClub(targetClubId)
           setBartenders(data)
         }
       } catch (error: any) {
@@ -48,13 +70,51 @@ export default function BartendersPage() {
       }
     }
     fetchData()
+    
+    // Listen for club changes from the selector
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'selectedClubId' && e.newValue) {
+        setClubId(e.newValue)
+        bartendersApi.getByClub(e.newValue).then(setBartenders).catch(() => {
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'Failed to load bartenders for selected club',
+          })
+        })
+      }
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    
+    // Also listen for custom event (for same-tab updates)
+    const handleClubChange = (e: CustomEvent<string>) => {
+      setClubId(e.detail)
+      bartendersApi.getByClub(e.detail).then(setBartenders).catch(() => {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to load bartenders for selected club',
+        })
+      })
+    }
+    
+    window.addEventListener('clubChanged' as any, handleClubChange as EventListener)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('clubChanged' as any, handleClubChange as EventListener)
+    }
   }, [toast])
 
   const handleSuccess = async () => {
-    if (clubId) {
+    // Reload bartenders for the current club
+    const currentClubId = clubId || localStorage.getItem('selectedClubId')
+    if (currentClubId) {
       try {
-        const data = await bartendersApi.getByClub(clubId)
+        const data = await bartendersApi.getByClub(currentClubId)
         setBartenders(data)
+        setClubId(currentClubId) // Ensure clubId is set
       } catch (error: any) {
         toast({
           variant: 'destructive',
@@ -64,6 +124,7 @@ export default function BartendersPage() {
       }
     }
   }
+
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -139,6 +200,7 @@ export default function BartendersPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Club</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Joined</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -151,13 +213,15 @@ export default function BartendersPage() {
                         {bartender.user_name || 'N/A'}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {/* Email not in response, would need to fetch from user */}
-                        -
+                        {bartender.user_email || '-'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {bartender.club_name || '-'}
                       </TableCell>
                       <TableCell>
                         <Badge
                           className={cn(
-                            'text-xs',
+                            'text-xs pointer-events-none',
                             bartender.is_active
                               ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
                               : 'bg-muted text-muted-foreground'
@@ -173,11 +237,11 @@ export default function BartendersPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          title="Remove Bartender"
-                          disabled
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                          title="Edit Club Association"
+                          onClick={() => setEditingBartender(bartender)}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Edit2 className="h-3.5 w-3.5" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -195,6 +259,17 @@ export default function BartendersPage() {
           open={isModalOpen}
           onOpenChange={setIsModalOpen}
           clubId={clubId}
+          onSuccess={handleSuccess}
+        />
+      )}
+
+      {/* Edit Bartender Modal */}
+      {clubId && editingBartender && (
+        <BartenderEditModal
+          open={!!editingBartender}
+          onOpenChange={(open) => !open && setEditingBartender(null)}
+          bartender={editingBartender}
+          currentClubId={clubId}
           onSuccess={handleSuccess}
         />
       )}

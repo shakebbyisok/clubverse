@@ -198,6 +198,7 @@ export interface Order {
   total_amount: string
   qr_code?: string
   payment_intent_id?: string
+  checkout_url?: string  // Stripe Checkout URL for card payments
   created_at: string
   updated_at?: string
   completed_at?: string
@@ -207,6 +208,8 @@ export interface Order {
 export interface OrderCreate {
   club_id: string
   payment_method?: PaymentMethod
+  success_url?: string  // Redirect after successful payment
+  cancel_url?: string   // Redirect if payment cancelled
   items: Array<{
     drink_id: string
     quantity: number
@@ -224,6 +227,17 @@ export interface Bartender {
   user_id: string
   club_id: string
   user_name?: string
+  user_email?: string
+  club_name?: string
+  is_active: boolean
+  created_at: string
+}
+
+export interface BartenderClubInfo {
+  club_id: string
+  club_name: string
+  club_address?: string | null
+  club_city?: string | null
   is_active: boolean
   created_at: string
 }

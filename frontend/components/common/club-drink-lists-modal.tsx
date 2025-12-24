@@ -5,18 +5,20 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogBody,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Loader2, Check } from 'lucide-react'
+import { SaveButton } from '@/components/common/save-button'
+import { Loader2, Check, List } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { drinkListsApi } from '@/lib/api/drink-lists'
 import { clubsApi } from '@/lib/api/clubs'
 import { DrinkList } from '@/types'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
-import { List } from 'lucide-react'
 
 interface ClubDrinkListsModalProps {
   open: boolean
@@ -120,37 +122,37 @@ export function ClubDrinkListsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Manage Drink Lists</DialogTitle>
           <DialogDescription>
-            Associate drink lists with <span className="font-medium">{clubName}</span>
+            Associate drink lists with <span className="font-medium text-foreground">{clubName}</span>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto min-h-0 py-4">
+        <DialogBody className="min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : allDrinkLists.length === 0 ? (
             <div className="text-center py-12">
-              <List className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
+              <List className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">
                 No drink lists available. Create one first.
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {allDrinkLists.map((list) => {
                 const isAssociated = associatedListIds.has(list.id)
                 return (
                   <div
                     key={list.id}
                     className={cn(
-                      'flex items-center gap-3 p-3 rounded-lg border transition-colors',
-                      'hover:bg-accent/30 cursor-pointer',
-                      isAssociated && 'bg-primary/5 border-primary/20'
+                      'flex items-center gap-3 p-3 rounded-md border border-border/50 transition-colors',
+                      'hover:bg-accent/50 cursor-pointer',
+                      isAssociated && 'bg-primary/5 border-primary/30'
                     )}
                     onClick={() => handleToggleList(list.id)}
                   >
@@ -187,31 +189,24 @@ export function ClubDrinkListsModal({
               })}
             </div>
           )}
-        </div>
+        </DialogBody>
 
-        <div className="flex items-center justify-end gap-2 pt-4 border-t">
+        <DialogFooter className="border-t border-border/50">
           <Button
-            variant="outline"
+            variant="ghost"
+            size="sm"
+            className="h-9 px-4"
             onClick={() => onOpenChange(false)}
             disabled={isSaving}
           >
             Cancel
           </Button>
-          <Button
+          <SaveButton
             onClick={handleSave}
-            disabled={isSaving || isLoading}
-            className="gap-1.5"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save Changes'
-            )}
-          </Button>
-        </div>
+            isLoading={isSaving}
+            disabled={isLoading}
+          />
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

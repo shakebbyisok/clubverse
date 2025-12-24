@@ -5,9 +5,10 @@ import { useClubs } from '@/lib/queries/use-clubs'
 import { useGeolocation } from '@/hooks/use-geolocation'
 import { InteractiveMap } from '@/components/map/interactive-map'
 import { Club } from '@/types'
-import { Loader2, AlertCircle } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useRouter } from 'next/navigation'
+import { ClubverseLoader } from '@/components/common/clubverse-loader'
 
 export default function MapPage() {
   const router = useRouter()
@@ -28,14 +29,7 @@ export default function MapPage() {
 
   // Loading state - only wait for clubs, not geolocation
   if (isLoading) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground text-sm">Loading clubs...</p>
-        </div>
-      </div>
-    )
+    return <ClubverseLoader fullScreen />
   }
 
   // Error state
@@ -55,8 +49,8 @@ export default function MapPage() {
 
   return (
     <div className="fixed inset-0 pb-16 bg-background">
-      {/* Geolocation error banner */}
-      {geoError && (
+      {/* Geolocation error banner - only show for actual permission denial */}
+      {geoError && geoError.code === geoError.PERMISSION_DENIED && (
         <div className="absolute top-4 left-4 right-4 z-10">
           <Alert className="bg-card/95 backdrop-blur-sm border-border/40 shadow-lg">
             <AlertCircle className="h-4 w-4" />

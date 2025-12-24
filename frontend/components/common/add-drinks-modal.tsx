@@ -18,8 +18,10 @@ import { NumberInput } from './number-input'
 import { useToast } from '@/hooks/use-toast'
 import { drinksApi, DrinkPreview } from '@/lib/api/drinks'
 import { clubsApi } from '@/lib/api/clubs'
+import { categoriesApi, Category } from '@/lib/api/categories'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { CategorySelect } from '@/components/common/category-select'
 
 interface AddDrinksModalProps {
   open: boolean
@@ -41,13 +43,24 @@ export function AddDrinksModal({
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [editingField, setEditingField] = useState<'name' | 'price' | 'category' | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  
+  // Categories state
+  const [systemCategories, setSystemCategories] = useState<Category[]>([])
+  const [customCategories, setCustomCategories] = useState<Category[]>([])
 
-  // Get club ID when modal opens
+  // Get club ID and categories when modal opens
   useEffect(() => {
     if (open) {
       clubsApi.getMyClub().then(club => {
         if (club?.id) {
           setClubId(club.id)
+          // Fetch categories for this club
+          categoriesApi.getClubCategories(club.id).then(tree => {
+            setSystemCategories(tree.system_categories)
+            setCustomCategories(tree.custom_categories)
+          }).catch(() => {
+            // Silently fail - categories are optional
+          })
         }
       }).catch(() => {
         // Handle error silently
@@ -57,6 +70,8 @@ export function AddDrinksModal({
       setInputText('')
       setPreviewDrinks([])
       setClubId(null)
+      setSystemCategories([])
+      setCustomCategories([])
     }
   }, [open])
 
@@ -104,7 +119,17 @@ export function AddDrinksModal({
 
     setIsSaving(true)
     try {
-      await drinksApi.batchCreate(clubId, previewDrinks)
+      // Map preview drinks to batch create format (includes category_id)
+      const drinksToCreate = previewDrinks.map(drink => ({
+        name: drink.name,
+        price: drink.price,
+        category: drink.category || null,
+        category_id: drink.category_id || null,
+        brand_name: drink.brand_name || null,
+        logo_url: drink.logo_url || null,
+      }))
+      
+      await drinksApi.batchCreate(clubId, drinksToCreate)
       
       toast({
         title: 'Success!',
@@ -144,6 +169,37 @@ export function AddDrinksModal({
         ...updated[index],
         [field]: field === 'price' ? (typeof value === 'string' ? parseFloat(value) || 0 : value) : value,
       }
+      return updated
+    })
+  }
+
+  // Update drink category by selecting from dropdown
+  const handleCategoryChange = (index: number, categoryId: string | null) => {
+    setPreviewDrinks(prev => {
+      const updated = [...prev]
+      
+      if (!categoryId || categoryId === '__none__') {
+        // Clear category
+        updated[index] = {
+          ...updated[index],
+          category: null,
+          category_id: null,
+          category_icon: null,
+        }
+      } else {
+        // Find category by ID
+        const allCategories = [...systemCategories, ...customCategories]
+        const category = allCategories.find(c => c.id === categoryId)
+        if (category) {
+          updated[index] = {
+            ...updated[index],
+            category: category.name,
+            category_id: category.id,
+            category_icon: category.icon || null,
+          }
+        }
+      }
+      
       return updated
     })
   }
@@ -395,29 +451,17 @@ export function AddDrinksModal({
                                     )}
                                   </div>
                                   
-                                  {/* Category Edit (inline) */}
-                                  {isEditingCategory && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs text-muted-foreground">Category:</span>
-                                      <Input
-                                        value={drink.category || ''}
-                                        onChange={(e) => handleUpdateDrink(index, 'category', e.target.value)}
-                                        onBlur={() => {
-                                          setEditingIndex(null)
-                                          setEditingField(null)
-                                        }}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            setEditingIndex(null)
-                                            setEditingField(null)
-                                          }
-                                        }}
-                                        placeholder="Category"
-                                        className="text-xs h-6 w-32"
-                                        autoFocus
-                                      />
-                                    </div>
-                                  )}
+                                  {/* Category Selector */}
+                                  <div className="flex items-center gap-2">
+                                    <CategorySelect
+                                      value={drink.category_id || null}
+                                      onValueChange={(value) => handleUpdateDrink(index, 'category_id', value)}
+                                      systemCategories={systemCategories}
+                                      customCategories={customCategories}
+                                      placeholder="No category"
+                                      className="h-6 w-[140px]"
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             )

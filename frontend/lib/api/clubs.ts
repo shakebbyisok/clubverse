@@ -59,4 +59,11 @@ export const clubsApi = {
     const response = await apiClient.get<string[]>(`/clubs/${clubId}/drink-lists`)
     return response.data
   },
+
+  /**
+   * Delete a club (club owner only)
+   */
+  deleteClub: async (clubId: string): Promise<void> => {
+    await apiClient.delete(`/clubs/${clubId}`)
+  },
 }

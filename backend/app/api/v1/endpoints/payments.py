@@ -9,10 +9,12 @@ import stripe
 
 router = APIRouter()
 
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
-    """Handle Stripe webhook events."""
+    """Handle Stripe webhook events for payments."""
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
     
@@ -30,14 +32,14 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             detail=str(e),
         )
     
-    # Handle payment_intent.succeeded
-    if event["type"] == "payment_intent.succeeded":
-        payment_intent = event["data"]["object"]
-        payment_intent_id = payment_intent["id"]
+    # Handle checkout.session.completed (Stripe Checkout success)
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        session_id = session["id"]
         
-        # Find order by payment_intent_id
+        # Find order by session ID (stored in payment_intent_id field)
         order = db.query(Order).filter(
-            Order.payment_intent_id == payment_intent_id
+            Order.payment_intent_id == session_id
         ).first()
         
         if order:
@@ -49,13 +51,42 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             order.qr_code = qr_code
             
             db.commit()
+            print(f"[Webhook] Order {order.id} marked as PAID with QR: {qr_code}")
+    
+    # Handle checkout.session.expired (user didn't complete payment)
+    elif event["type"] == "checkout.session.expired":
+        session = event["data"]["object"]
+        session_id = session["id"]
+        
+        order = db.query(Order).filter(
+            Order.payment_intent_id == session_id
+        ).first()
+        
+        if order:
+            order.status = OrderStatus.CANCELLED
+            db.commit()
+            print(f"[Webhook] Order {order.id} cancelled (session expired)")
+    
+    # Handle payment_intent.succeeded (legacy/fallback)
+    elif event["type"] == "payment_intent.succeeded":
+        payment_intent = event["data"]["object"]
+        payment_intent_id = payment_intent["id"]
+        
+        order = db.query(Order).filter(
+            Order.payment_intent_id == payment_intent_id
+        ).first()
+        
+        if order and order.status == OrderStatus.PENDING_PAYMENT:
+            qr_code = generate_qr_code()
+            order.status = OrderStatus.PAID
+            order.qr_code = qr_code
+            db.commit()
     
     # Handle payment_intent.payment_failed
     elif event["type"] == "payment_intent.payment_failed":
         payment_intent = event["data"]["object"]
         payment_intent_id = payment_intent["id"]
         
-        # Find order and mark as cancelled
         order = db.query(Order).filter(
             Order.payment_intent_id == payment_intent_id
         ).first()
@@ -65,4 +96,3 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             db.commit()
     
     return {"status": "success"}
-

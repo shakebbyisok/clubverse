@@ -28,6 +28,7 @@ class SubcategoryResponse(SubcategoryBase):
 class CategoryBase(BaseModel):
     name: str
     description: Optional[str] = None
+    icon: Optional[str] = None  # Emoji icon for category
     display_order: int = 0
 
 
@@ -37,7 +38,8 @@ class CategoryCreate(CategoryBase):
 
 class CategoryResponse(CategoryBase):
     id: str
-    club_id: str
+    club_id: Optional[str] = None  # Nullable for system categories
+    is_system: bool = False  # True for predefined system categories
     is_active: bool
     subcategories: List[SubcategoryResponse] = []
     created_at: datetime
@@ -48,8 +50,9 @@ class CategoryResponse(CategoryBase):
 
 
 class CategoryTreeResponse(BaseModel):
-    """Full category tree with subcategories"""
-    categories: List[CategoryResponse]
+    """Full category tree with system and custom categories"""
+    system_categories: List[CategoryResponse] = []  # Predefined system categories
+    custom_categories: List[CategoryResponse] = []  # Club-specific custom categories
 
     class Config:
         from_attributes = True

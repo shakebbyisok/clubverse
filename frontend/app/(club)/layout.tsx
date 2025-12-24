@@ -23,6 +23,57 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
     }
   }, [user, isLoading, router])
 
+  // Update browser title and favicon for club owner UI
+  useEffect(() => {
+    if (user?.role === UserRole.CLUB_OWNER) {
+      // Update document title
+      document.title = 'Clubverse - Club Dashboard'
+      
+      // Update favicon
+      const updateFavicon = (href: string) => {
+        let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement
+        if (!link) {
+          link = document.createElement('link')
+          link.rel = 'icon'
+          document.head.appendChild(link)
+        }
+        link.href = href
+        
+        // Also update shortcut icon
+        let shortcut = document.querySelector("link[rel~='shortcut icon']") as HTMLLinkElement
+        if (!shortcut) {
+          shortcut = document.createElement('link')
+          shortcut.rel = 'shortcut icon'
+          document.head.appendChild(shortcut)
+        }
+        shortcut.href = href
+        
+        // Update apple-touch-icon
+        let apple = document.querySelector("link[rel~='apple-touch-icon']") as HTMLLinkElement
+        if (!apple) {
+          apple = document.createElement('link')
+          apple.rel = 'apple-touch-icon'
+          document.head.appendChild(apple)
+        }
+        apple.href = href
+      }
+      
+      updateFavicon('/assets/whiteclubverse.svg')
+      
+      // Cleanup: restore original favicon when component unmounts
+      return () => {
+        document.title = 'La Previa - Nightlife Drink Ordering'
+        const originalFavicon = '/assets/previa/whiteprevia.svg'
+        const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement
+        const shortcut = document.querySelector("link[rel~='shortcut icon']") as HTMLLinkElement
+        const apple = document.querySelector("link[rel~='apple-touch-icon']") as HTMLLinkElement
+        if (link) link.href = originalFavicon
+        if (shortcut) shortcut.href = originalFavicon
+        if (apple) apple.href = originalFavicon
+      }
+    }
+  }, [user])
+
   // Fetch user's clubs
   useEffect(() => {
     if (user?.role === UserRole.CLUB_OWNER) {
@@ -70,6 +121,8 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
   const handleClubChange = (clubId: string) => {
     setSelectedClubId(clubId)
     localStorage.setItem('selectedClubId', clubId)
+    // Dispatch custom event for same-tab updates
+    window.dispatchEvent(new CustomEvent('clubChanged', { detail: clubId }))
   }
 
   const handleCreateClub = () => {

@@ -9,9 +9,46 @@ from app.models.drink import Drink
 from app.models.order import Order, OrderItem, OrderStatus, PaymentMethod
 from app.models.bartender import Bartender
 from app.schemas.order import OrderResponse, OrderItemResponse, OrderStatusUpdate, QRScanRequest
+from app.schemas.bartender import BartenderClubInfo
 from app.core.dependencies import get_current_bartender
 
 router = APIRouter()
+
+
+@router.get("/club", response_model=BartenderClubInfo)
+def get_my_club(
+    current_user: User = Depends(get_current_bartender),
+    db: Session = Depends(get_db)
+):
+    """Get the club information for the current bartender."""
+    # Get bartender's active club
+    bartender = db.query(Bartender).filter(
+        Bartender.user_id == current_user.id,
+        Bartender.is_active == True
+    ).first()
+    
+    if not bartender:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bartender profile not found or inactive",
+        )
+    
+    # Get club info
+    club = db.query(Club).filter(Club.id == bartender.club_id).first()
+    if not club:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Club not found",
+        )
+    
+    return BartenderClubInfo(
+        club_id=club.id,
+        club_name=club.name,
+        club_address=club.formatted_address or club.address,
+        club_city=club.city,
+        is_active=bartender.is_active,
+        created_at=bartender.created_at,
+    )
 
 
 @router.get("/orders", response_model=List[OrderResponse])

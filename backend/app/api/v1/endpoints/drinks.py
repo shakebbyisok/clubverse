@@ -34,7 +34,9 @@ class DrinkPreview(BaseModel):
     """Preview data for a drink before saving."""
     name: str
     price: float
-    category: str | None = None
+    category: str | None = None  # Legacy text category from AI
+    category_id: str | None = None  # Matched system/custom category ID
+    category_icon: str | None = None  # Category emoji icon
     brand_name: str | None = None
     logo_url: str | None = None
 
@@ -48,7 +50,8 @@ class BatchDrinkCreate(BaseModel):
     """Single drink for batch creation."""
     name: str
     price: float
-    category: str | None = None
+    category: str | None = None  # Legacy text category
+    category_id: str | None = None  # Category ID (system or custom)
     brand_name: str | None = None
     logo_url: str | None = None
 
@@ -146,47 +149,76 @@ async def parse_preview(
     if not parsed_drinks:
         return ParsePreviewResponse(drinks=[])
     
-    # Map categories to our structure
-    def map_category(category: str, subcategory: str = None) -> str:
-        """Map LLM category to our category name"""
-        if not category:
-            return None
+    # Fetch system categories for matching
+    category_service = CategoryService()
+    category_service.ensure_system_categories_exist(db)
+    system_categories = category_service.get_system_categories(db)
+    
+    # Build category lookup maps (name -> category)
+    category_by_name = {cat.name.lower(): cat for cat in system_categories}
+    
+    # Map LLM category names to our system category names
+    LLM_CATEGORY_MAP = {
+        "liquors": "Spirits",
+        "liquor": "Spirits",
+        "spirits": "Spirits",
+        "beers": "Beers",
+        "beer": "Beers",
+        "wines": "Wines",
+        "wine": "Wines",
+        "sodas": "Sodas",
+        "soda": "Sodas",
+        "soft drinks": "Sodas",
+        "cocktails": "Cocktails",
+        "cocktail": "Cocktails",
+        "drinks_liquor_soda": "Cocktails",
+        "mixed drinks": "Cocktails",
+        "shots": "Shots",
+        "shot": "Shots",
+        "shooters": "Shots",
+        "non-alcoholic": "Non-Alcoholic",
+        "mocktails": "Non-Alcoholic",
+        "alcohol-free": "Non-Alcoholic",
+    }
+    
+    def match_category(llm_category: str) -> tuple:
+        """
+        Match LLM category to system category.
+        Returns: (category_name, category_id, category_icon)
+        """
+        if not llm_category:
+            return None, None, None
         
-        cat_lower = category.lower()
-        subcat_lower = (subcategory or "").lower()
+        cat_lower = llm_category.lower().strip()
         
-        # Map LLM categories to our categories
-        if cat_lower == "liquors":
-            return "Liquors"
-        elif cat_lower == "drinks_liquor_soda":
-            return "Drinks (liquor + soda)"
-        elif cat_lower == "beers":
-            return "Beers"
-        elif cat_lower == "sodas":
-            return "Sodas"
-        elif cat_lower == "wines":
-            return "Wines"
-        elif cat_lower in ["shot", "cocktail"]:
-            # Legacy categories
-            return "Liquors" if cat_lower == "shot" else "Drinks (liquor + soda)"
+        # Try direct mapping first
+        mapped_name = LLM_CATEGORY_MAP.get(cat_lower)
+        if mapped_name:
+            cat = category_by_name.get(mapped_name.lower())
+            if cat:
+                return cat.name, str(cat.id), cat.icon
         
-        return None
+        # Try direct match with system categories
+        cat = category_by_name.get(cat_lower)
+        if cat:
+            return cat.name, str(cat.id), cat.icon
+        
+        # No match - return original category name without ID
+        return llm_category, None, None
     
     # Get logo URLs and map categories
     preview_drinks = []
     for drink in parsed_drinks:
         brand_name = drink.get("name")
         
-        # Map category first (needed for image resolver)
+        # Map category to system category
         llm_category = drink.get("category")
-        llm_subcategory = drink.get("subcategory")
-        mapped_category = map_category(llm_category, llm_subcategory)
+        category_name, category_id, category_icon = match_category(llm_category)
         
         # Use image resolver (checks brand logos first, then generic fallbacks)
-        # Works for liquors, beers, and sodas
         logo_url = image_resolver.resolve_drink_image(
             drink_name=drink["name"],
-            category=mapped_category or llm_category,
+            category=category_name or llm_category,
             brand_name=brand_name
         )
         
@@ -197,7 +229,9 @@ async def parse_preview(
         preview_drinks.append(DrinkPreview(
             name=drink["name"],
             price=drink["price"],
-            category=mapped_category or llm_category,  # Fallback to original if mapping fails
+            category=category_name,
+            category_id=category_id,
+            category_icon=category_icon,
             brand_name=brand_name,
             logo_url=logo_url,
         ))
@@ -319,8 +353,13 @@ async def batch_create_drinks(
             logger.info(f"Skipping duplicate drink: {drink_data.name} (${drink_data.price})")
             continue
         
-        # Find category assignment
-        category_id, subcategory_id = find_category_assignment(drink_data.category, drink_data.name)
+        # Use category_id if provided directly (from frontend picker)
+        # Otherwise fall back to legacy category name matching
+        if drink_data.category_id:
+            category_id = drink_data.category_id
+            subcategory_id = None
+        else:
+            category_id, subcategory_id = find_category_assignment(drink_data.category, drink_data.name)
         
         # Resolve image URL using image resolver (handles liquors, beers, sodas)
         # Use provided logo_url if available, otherwise resolve from drink name/category
@@ -332,12 +371,20 @@ async def batch_create_drinks(
                 brand_name=drink_data.brand_name or drink_data.name
             )
         
+        # Parse category_id to UUID if it's a string
+        cat_uuid = None
+        if category_id:
+            try:
+                cat_uuid = UUID(category_id) if isinstance(category_id, str) else category_id
+            except ValueError:
+                logger.warning(f"Invalid category_id format: {category_id}")
+        
         db_drink = Drink(
             club_id=club_uuid,
             name=drink_data.name,
             price=drink_data.price,
             category=drink_data.category,  # Keep legacy field
-            category_id=UUID(category_id) if category_id else None,
+            category_id=cat_uuid,
             subcategory_id=UUID(subcategory_id) if subcategory_id else None,
             image_url=image_url,  # Resolved logo path (e.g., "/assets/logos/liquors/absolut.png")
             brand_name=drink_data.brand_name,

@@ -10,6 +10,7 @@ import {
 import { Building2, Plus, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ClubLogo } from './club-logo'
+import { TruncatedText } from './truncated-text'
 import { LogoSettings } from '@/types'
 
 export interface Club {
@@ -31,22 +32,6 @@ interface ClubSelectorProps {
   className?: string
 }
 
-// Helper function to truncate address for display
-function formatAddressForDisplay(address: string | undefined, maxLength: number = 35): string {
-  if (!address) return ''
-  
-  // If address is short enough, return as is
-  if (address.length <= maxLength) return address
-  
-  // Try to truncate at a comma (prefer showing street + city)
-  const commaIndex = address.indexOf(',')
-  if (commaIndex > 0 && commaIndex <= maxLength) {
-    return address.substring(0, commaIndex) + '...'
-  }
-  
-  // Otherwise, truncate at maxLength
-  return address.substring(0, maxLength - 3) + '...'
-}
 
 export function ClubSelector({
   clubs,
@@ -96,23 +81,27 @@ export function ClubSelector({
         value={selectedClubId || undefined}
         onValueChange={onClubChange}
       >
-        <SelectTrigger className="h-auto w-full border border-border/40 bg-card/50 hover:bg-accent/50 px-2 py-1.5 rounded-[var(--radius)] transition-colors shadow-none">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+        <SelectTrigger className="h-auto w-full border border-border/40 bg-card/50 hover:bg-accent/50 px-2 py-1.5 rounded-lg transition-colors shadow-none">
+          <div className="flex items-center gap-3 flex-1 min-w-0 w-full overflow-hidden">
             <ClubLogo
               logoUrl={selectedClub?.logo_url}
               logoSettings={selectedClub?.logo_settings}
               alt={selectedClub?.name || 'Club'}
               size={32}
-              className="flex-shrink-0"
+              containerClassName="flex-shrink-0"
             />
-            <SelectValue placeholder="Select a club" className="flex-1 min-w-0">
+            <SelectValue placeholder="Select a club" className="flex-1 min-w-0 w-0 overflow-hidden">
               {selectedClub ? (
-                <div className="flex flex-col items-start min-w-0 flex-1 gap-0.5">
+                <div className="flex flex-col items-start min-w-0 w-full gap-0.5 overflow-hidden">
                   <span className="text-sm font-semibold truncate w-full leading-tight">{selectedClub.name}</span>
                   {(selectedClub.formatted_address || selectedClub.city) && (
-                    <span className="text-xs text-muted-foreground truncate w-full leading-tight" title={selectedClub.formatted_address || selectedClub.city}>
-                      {formatAddressForDisplay(selectedClub.formatted_address || selectedClub.city, 30)}
-                    </span>
+                    <div className="w-full min-w-0 overflow-hidden">
+                      <TruncatedText
+                        text={selectedClub.formatted_address || selectedClub.city || ''}
+                        className="text-xs text-muted-foreground leading-tight"
+                        maxChars={18}
+                      />
+                    </div>
                   )}
                 </div>
               ) : (
@@ -121,23 +110,24 @@ export function ClubSelector({
             </SelectValue>
           </div>
         </SelectTrigger>
-        <SelectContent className="min-w-[220px]">
+        <SelectContent className="w-[280px]">
           {clubs.map((club) => (
-            <SelectItem key={club.id} value={club.id} className="py-1.5 pl-2">
-              <div className="flex items-center gap-3 w-full">
+            <SelectItem key={club.id} value={club.id} className="py-2 px-2">
+              <div className="flex items-center gap-3 w-full overflow-hidden">
                 <ClubLogo
                   logoUrl={club.logo_url}
                   logoSettings={club.logo_settings}
                   alt={club.name}
-                  size={28}
-                  className="flex-shrink-0"
+                  size={36}
                 />
-                <div className="flex flex-col items-start gap-0.5 flex-1 min-w-0">
-                  <span className="text-sm font-semibold truncate w-full">{club.name}</span>
+                <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1 overflow-hidden">
+                  <span className="text-sm font-semibold truncate max-w-full">{club.name}</span>
                   {(club.formatted_address || club.city) && (
-                    <span className="text-xs text-muted-foreground truncate w-full" title={club.formatted_address || club.city}>
-                      {formatAddressForDisplay(club.formatted_address || club.city, 30)}
-                    </span>
+                    <TruncatedText
+                      text={club.formatted_address || club.city || ''}
+                      className="text-xs text-muted-foreground cursor-default"
+                      maxChars={30}
+                    />
                   )}
                 </div>
               </div>

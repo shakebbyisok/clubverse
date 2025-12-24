@@ -1,7 +1,15 @@
 import { apiClient } from './client'
-import { Order } from '@/types'
+import { Order, BartenderClubInfo } from '@/types'
 
 export const bartenderApi = {
+  /**
+   * Get the club information for the current bartender
+   */
+  getMyClub: async (): Promise<BartenderClubInfo> => {
+    const response = await apiClient.get<BartenderClubInfo>('/bartender/club')
+    return response.data
+  },
+
   /**
    * Get orders for bartender's club
    */

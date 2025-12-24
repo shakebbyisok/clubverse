@@ -19,6 +19,14 @@ export const ordersApi = {
   },
 
   /**
+   * Get order by Stripe session ID (for success page)
+   */
+  getOrderBySession: async (sessionId: string): Promise<Order> => {
+    const response = await apiClient.get<Order>(`/orders/session/${sessionId}`)
+    return response.data
+  },
+
+  /**
    * Get current user's orders
    */
   getMyOrders: async (skip: number = 0, limit: number = 50): Promise<Order[]> => {
