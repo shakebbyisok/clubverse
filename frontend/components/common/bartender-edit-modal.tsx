@@ -136,7 +136,7 @@ export function BartenderEditModal({
         <DialogHeader>
           <DialogTitle>Edit Bartender</DialogTitle>
           <DialogDescription>
-            Update bartender's club association and status
+            Update bartender&apos;s club association and status
           </DialogDescription>
         </DialogHeader>
 

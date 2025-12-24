@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Loader2, Edit, Trash2, List, CreditCard, CheckCircle2, AlertCircle, Building2, RefreshCw, Clock, XCircle } from 'lucide-react'
+import { Plus, Edit, Trash2, List, CreditCard, CheckCircle2, AlertCircle, Building2, RefreshCw, Clock, XCircle } from 'lucide-react'
+import { ClubverseLoader } from '@/components/common/clubverse-loader'
 import { useToast } from '@/hooks/use-toast'
 import { clubsApi } from '@/lib/api/clubs'
 import { stripeConnectApi } from '@/lib/api/stripe-connect'
@@ -404,9 +405,8 @@ export default function ClubSettingsPage() {
           <Card className="border-border/40 bg-card/50 backdrop-blur-sm">
             <CardContent className="p-6">
               {isLoadingStripe ? (
-                <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading status...
+                <div className="flex items-center justify-center py-8">
+                  <ClubverseLoader size="sm" />
                 </div>
               ) : (
                 <div className="space-y-4">

@@ -2,7 +2,8 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Users, Loader2, Edit2 } from 'lucide-react'
+import { Plus, Users, Edit2 } from 'lucide-react'
+import { ClubverseLoader } from '@/components/common/clubverse-loader'
 import { useState, useEffect } from 'react'
 import {
   Table,
@@ -135,11 +136,7 @@ export default function BartendersPage() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <ClubverseLoader fullScreen />
   }
 
   if (!clubId) {

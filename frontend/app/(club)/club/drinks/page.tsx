@@ -1,7 +1,8 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Plus, Wine, Loader2, Building2, List, MoreVertical, Filter, Settings } from 'lucide-react'
+import { Plus, Wine, Building2, List, MoreVertical, Filter, Settings } from 'lucide-react'
+import { ClubverseLoader } from '@/components/common/clubverse-loader'
 import { useState, useEffect, useMemo } from 'react'
 import { drinksApi, Drink } from '@/lib/api/drinks'
 import { drinkListsApi } from '@/lib/api/drink-lists'
@@ -544,11 +545,7 @@ export default function DrinksPage() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <ClubverseLoader fullScreen />
   }
 
   if (!clubId) {
