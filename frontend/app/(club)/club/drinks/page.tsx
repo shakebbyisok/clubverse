@@ -209,7 +209,12 @@ export default function DrinksPage() {
 
   // Handle drink update
   const handleUpdateDrink = async (drinkId: string, data: DrinkUpdateData) => {
-    await drinksApi.update(drinkId, data)
+    // Convert price from number to string for API compatibility
+    const apiData: Partial<Drink> = {
+      ...data,
+      price: data.price !== undefined ? String(data.price) : undefined,
+    }
+    await drinksApi.update(drinkId, apiData)
     await loadDrinks()
   }
 

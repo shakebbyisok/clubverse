@@ -455,7 +455,7 @@ export function AddDrinksModal({
                                   <div className="flex items-center gap-2">
                                     <CategorySelect
                                       value={drink.category_id || null}
-                                      onValueChange={(value) => handleUpdateDrink(index, 'category_id', value)}
+                                      onValueChange={(value) => handleCategoryChange(index, value)}
                                       systemCategories={systemCategories}
                                       customCategories={customCategories}
                                       placeholder="No category"

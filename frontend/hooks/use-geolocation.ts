@@ -20,7 +20,8 @@ export function useGeolocation() {
   })
 
   useEffect(() => {
-    if (!navigator.geolocation) {
+    const geo = navigator.geolocation
+    if (!geo) {
       setState((prev) => ({
         ...prev,
         error: {
@@ -60,7 +61,7 @@ export function useGeolocation() {
         }
 
         // Permission granted or prompt - try to get position
-        navigator.geolocation.getCurrentPosition(
+        geo.getCurrentPosition(
           (position) => {
             setState({
               latitude: position.coords.latitude,
@@ -92,7 +93,7 @@ export function useGeolocation() {
         )
       }).catch(() => {
         // Permissions API not supported, fall back to direct geolocation
-        navigator.geolocation.getCurrentPosition(
+        geo.getCurrentPosition(
           (position) => {
             setState({
               latitude: position.coords.latitude,
@@ -123,7 +124,7 @@ export function useGeolocation() {
       })
     } else {
       // Permissions API not available, use direct geolocation
-      navigator.geolocation.getCurrentPosition(
+      geo.getCurrentPosition(
         (position) => {
           setState({
             latitude: position.coords.latitude,
