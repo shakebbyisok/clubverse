@@ -1,7 +1,7 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Plus, Wine, Building2, List, MoreVertical, Filter, Settings } from 'lucide-react'
+import { Plus, Wine, Building2, List, MoreVertical, Filter, Settings, Loader2 } from 'lucide-react'
 import { ClubverseLoader } from '@/components/common/clubverse-loader'
 import { useState, useEffect, useMemo } from 'react'
 import { drinksApi, Drink } from '@/lib/api/drinks'
