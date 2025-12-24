@@ -69,3 +69,58 @@ class ClubResponse(ClubBase):
 class Club(ClubResponse):
     pass
 
+
+# Analytics schemas
+class HourlyActivity(BaseModel):
+    hour: int
+    orders: int
+    revenue: float
+
+
+class OrdersByStatus(BaseModel):
+    pending: int
+    paid: int
+    preparing: int
+    ready: int
+    completed: int
+    cancelled: int
+
+
+class TopDrink(BaseModel):
+    id: str
+    name: str
+    count: int
+    revenue: float
+    image_url: Optional[str] = None
+
+
+class RecentOrder(BaseModel):
+    id: str
+    customer_name: Optional[str] = None
+    total_amount: float
+    status: str
+    payment_method: str
+    items_count: int
+    created_at: datetime
+
+
+class ClubAnalytics(BaseModel):
+    # Summary stats
+    today_revenue: float
+    today_orders: int
+    week_revenue: float
+    week_orders: int
+    pending_orders: int
+    active_bartenders: int
+    total_drinks: int
+    
+    # Charts data
+    orders_by_status: OrdersByStatus
+    hourly_activity: list[HourlyActivity]
+    top_drinks: list[TopDrink]
+    recent_orders: list[RecentOrder]
+    
+    # Comparison percentages
+    revenue_change_percent: float
+    orders_change_percent: float
+

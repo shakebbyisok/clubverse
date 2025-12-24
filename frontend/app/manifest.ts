@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: 'clubverse-app',
     name: 'Clubverse',
     short_name: 'Clubverse',
     description: 'Order drinks at your favorite clubs',
@@ -10,6 +11,7 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: '#0a0a0a',
     theme_color: '#0a0a0a',
     orientation: 'portrait',
+    categories: ['food', 'lifestyle', 'social'],
     icons: [
       {
         src: '/assets/whitepng.png',
