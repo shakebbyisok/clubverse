@@ -10,12 +10,25 @@ import { Toaster } from '@/components/ui/toaster'
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 
 export const metadata: Metadata = {
-  title: 'La Previa - Nightlife Drink Ordering',
+  title: 'Clubverse',
   description: 'Order drinks at your favorite clubs instantly',
+  manifest: '/manifest.webmanifest',
+  themeColor: '#0a0a0a',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Clubverse',
+  },
   icons: {
-    icon: '/assets/previa/whiteprevia.svg',
-    shortcut: '/assets/previa/whiteprevia.svg',
-    apple: '/assets/previa/whiteprevia.svg',
+    icon: '/assets/whiteicon.svg',
+    shortcut: '/assets/whitepng.png',
+    apple: '/assets/whitepng.png',
   },
 }
 
