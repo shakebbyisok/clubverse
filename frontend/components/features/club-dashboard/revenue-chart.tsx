@@ -35,7 +35,7 @@ export function RevenueChart({ data, loading }: RevenueChartProps) {
     return (
       <Card className="bg-card/50 border-border/40">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold">Today's Activity</CardTitle>
+          <CardTitle className="text-base font-semibold">Today&apos;s Activity</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[280px] bg-muted/30 animate-pulse rounded-lg" />
@@ -51,7 +51,7 @@ export function RevenueChart({ data, loading }: RevenueChartProps) {
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
           <div>
-            <CardTitle className="text-base font-semibold">Today's Activity</CardTitle>
+            <CardTitle className="text-base font-semibold">Today&apos;s Activity</CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
               {totalOrders} orders • ${totalRevenue.toFixed(2)} revenue
             </p>
@@ -106,8 +106,8 @@ export function RevenueChart({ data, loading }: RevenueChartProps) {
                     borderRadius: '8px',
                     fontSize: '12px',
                   }}
-                  formatter={(value: number, name: string) => [
-                    name === 'revenue' ? `$${value.toFixed(2)}` : value,
+                  formatter={(value: number | undefined, name: string | undefined) => [
+                    name === 'revenue' ? `$${(value ?? 0).toFixed(2)}` : (value ?? 0),
                     name === 'revenue' ? 'Revenue' : 'Orders'
                   ]}
                 />

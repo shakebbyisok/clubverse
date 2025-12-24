@@ -87,7 +87,7 @@ export function OrdersByStatusChart({ data, loading }: OrdersByStatusChartProps)
                     borderRadius: '8px',
                     fontSize: '12px',
                   }}
-                  formatter={(value: number) => [value, 'Orders']}
+                  formatter={(value: number | undefined) => [value ?? 0, 'Orders']}
                 />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                   {chartData.map((entry, index) => (
