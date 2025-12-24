@@ -6,7 +6,8 @@ import { Order, PaymentMethod } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, CreditCard, DollarSign, CheckCircle2, ShoppingBag } from 'lucide-react'
+import { CreditCard, DollarSign, CheckCircle2, ShoppingBag, Loader2 } from 'lucide-react'
+import { ClubverseLoader } from '@/components/common/clubverse-loader'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +16,7 @@ export default function BartenderOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [confirmingPayment, setConfirmingPayment] = useState<string | null>(null)
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null)
 
   useEffect(() => {
     loadOrders()
@@ -59,6 +61,7 @@ export default function BartenderOrdersPage() {
   }
 
   const handleStatusUpdate = async (orderId: string, status: string) => {
+    setUpdatingStatus(orderId)
     try {
       await bartenderApi.updateOrderStatus(orderId, status)
       toast({
@@ -71,15 +74,13 @@ export default function BartenderOrdersPage() {
         title: 'Error',
         description: error.response?.data?.detail || 'Failed to update status',
       })
+    } finally {
+      setUpdatingStatus(null)
     }
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <ClubverseLoader fullScreen />
   }
 
   return (
@@ -204,27 +205,39 @@ export default function BartenderOrdersPage() {
                     {isPaid && (
                       <Button
                         onClick={() => handleStatusUpdate(order.id, 'preparing')}
-                        className="flex-1"
+                        disabled={updatingStatus === order.id}
+                        className="flex-1 gap-2"
                         size="sm"
                       >
+                        {updatingStatus === order.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : null}
                         Start Preparing
                       </Button>
                     )}
                     {isPreparing && (
                       <Button
                         onClick={() => handleStatusUpdate(order.id, 'ready')}
-                        className="flex-1"
+                        disabled={updatingStatus === order.id}
+                        className="flex-1 gap-2"
                         size="sm"
                       >
+                        {updatingStatus === order.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : null}
                         Mark Ready
                       </Button>
                     )}
                     {isReady && (
                       <Button
                         onClick={() => handleStatusUpdate(order.id, 'completed')}
-                        className="flex-1"
+                        disabled={updatingStatus === order.id}
+                        className="flex-1 gap-2"
                         size="sm"
                       >
+                        {updatingStatus === order.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : null}
                         Complete Order
                       </Button>
                     )}

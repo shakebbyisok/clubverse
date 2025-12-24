@@ -72,10 +72,8 @@ jobs:
             # Extract deployment
             tar -xzf /tmp/deploy.tar.gz -C /tmp/
             
-            # Backup current deployment (optional)
-            if [ -d "backend" ]; then
-              cp -r backend backend.backup.$(date +%Y%m%d_%H%M%S) || true
-            fi
+            # Clean up old backups (keep last 2)
+            find . -maxdepth 1 -type d -name "backend.backup.*" | sort -r | tail -n +3 | xargs rm -rf 2>/dev/null || true
             
             # Deploy backend
             echo "Deploying backend..."
@@ -155,14 +153,30 @@ jobs:
               cd ..
             fi
             
-            # Restart nginx
-            sudo systemctl restart nginx 2>/dev/null || echo "Nginx restart skipped"
+            # Reload nginx (not restart - config is immutable)
+            sudo systemctl reload nginx 2>/dev/null || echo "Nginx reload skipped"
             
-            # Reload SSL certificates if using certbot
-            sudo certbot renew --quiet 2>/dev/null || true
+            # Wait for services to be ready
+            sleep 5
+            
+            # Verify frontend is responding
+            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ Frontend is responding on localhost:3000"
+            else
+              echo "⚠️ Frontend not responding - checking logs..."
+              sudo journalctl -u clubverse-frontend -n 10 --no-pager || true
+            fi
+            
+            # Verify backend is responding
+            if curl -sf http://localhost:8000/docs > /dev/null 2>&1; then
+              echo "✅ Backend is responding on localhost:8000"
+            else
+              echo "⚠️ Backend not responding - checking logs..."
+              sudo journalctl -u clubverse-backend -n 10 --no-pager || true
+            fi
             
             # Cleanup
             rm -f /tmp/deploy.tar.gz
             rm -rf /tmp/deploy
             
-            echo "Deployment completed successfully!"
+            echo "✅ Deployment completed!"

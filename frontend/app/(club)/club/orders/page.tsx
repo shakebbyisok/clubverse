@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -51,7 +51,6 @@ const PAGE_SIZE = 20
 
 export default function OrdersPage() {
   const { toast } = useToast()
-  const [orders, setOrders] = useState<ClubOrder[]>([])
   const [clubId, setClubId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -65,7 +64,8 @@ export default function OrdersPage() {
     if (!clubId) return
 
     try {
-      const data = await analyticsApi.getClubOrders(clubId, statusFilter)
+      // Always fetch all orders, filtering is done client-side for instant feedback
+      const data = await analyticsApi.getClubOrders(clubId, 'all')
       setAllOrders(data)
       setTotalOrders(data.length)
     } catch (error: any) {
@@ -79,7 +79,7 @@ export default function OrdersPage() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }, [clubId, statusFilter, toast])
+  }, [clubId, toast])
 
   useEffect(() => {
     const fetchClub = async () => {
@@ -117,18 +117,20 @@ export default function OrdersPage() {
     loadOrders()
   }
 
-  const filteredOrders = statusFilter === 'all' 
-    ? allOrders 
-    : allOrders.filter(o => o.status === statusFilter)
+  const filteredOrders = useMemo(() => {
+    return statusFilter === 'all' 
+      ? allOrders 
+      : allOrders.filter(o => o.status === statusFilter)
+  }, [allOrders, statusFilter])
   
   const filteredCount = filteredOrders.length
   const totalPages = Math.ceil(filteredCount / PAGE_SIZE)
   
-  // Update displayed orders when page changes
-  useEffect(() => {
+  // Calculate displayed orders (no useEffect needed, just compute directly)
+  const displayedOrders = useMemo(() => {
     const startIndex = (currentPage - 1) * PAGE_SIZE
     const endIndex = startIndex + PAGE_SIZE
-    setOrders(filteredOrders.slice(startIndex, endIndex))
+    return filteredOrders.slice(startIndex, endIndex)
   }, [filteredOrders, currentPage])
 
   if (isLoading) {
@@ -207,7 +209,7 @@ export default function OrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {filteredOrders.map(order => {
+                {displayedOrders.map(order => {
                   const style = STATUS_STYLES[order.status] || STATUS_STYLES.pending_payment
                   const timeAgo = formatDistanceToNow(new Date(order.created_at), { addSuffix: true })
                   const itemsSummary = order.items.map(i => `${i.quantity}x ${i.drink_name || 'Item'}`).join(', ')
