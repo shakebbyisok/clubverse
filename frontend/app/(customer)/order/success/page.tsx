@@ -1,13 +1,28 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react'
+import { CheckCircle2, AlertCircle, RefreshCw, PartyPopper } from 'lucide-react'
 import { ClubverseLoader } from '@/components/common/clubverse-loader'
 import { ordersApi } from '@/lib/api/orders'
-import { Order } from '@/types'
+import { Order, OrderStatus } from '@/types'
 import { QRCodeSVG } from 'qrcode.react'
 import Image from 'next/image'
+
+// Wake Lock types for screen brightness
+interface WakeLockSentinel extends EventTarget {
+  released: boolean
+  type: 'screen'
+  release(): Promise<void>
+}
+
+interface WakeLock {
+  request(type: 'screen'): Promise<WakeLockSentinel>
+}
+
+interface NavigatorWithWakeLock {
+  wakeLock?: WakeLock
+}
 
 export default function OrderSuccessPage() {
   const searchParams = useSearchParams()
@@ -17,7 +32,81 @@ export default function OrderSuccessPage() {
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const sessionId = searchParams.get('session_id')
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Enable wake lock to keep screen on while showing QR
+  const enableWakeLock = useCallback(async () => {
+    const nav = navigator as unknown as NavigatorWithWakeLock
+    if (nav.wakeLock && !wakeLockRef.current) {
+      try {
+        const wakeLock = await nav.wakeLock.request('screen')
+        wakeLockRef.current = wakeLock
+        wakeLock.addEventListener('release', () => {
+          wakeLockRef.current = null
+        })
+      } catch (err) {
+        console.log('Wake lock not supported:', err)
+      }
+    }
+  }, [])
+
+  // Disable wake lock
+  const disableWakeLock = useCallback(async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release()
+        wakeLockRef.current = null
+      } catch (err) {}
+    }
+  }, [])
+
+  // Check if order is completed
+  const isCompleted = order?.status === OrderStatus.COMPLETED || order?.status === 'completed'
+
+  // Poll for order status updates (1 second interval)
+  useEffect(() => {
+    if (!order?.id || isCompleted) return
+
+    const pollStatus = async () => {
+      try {
+        const updated = await ordersApi.getOrder(order.id)
+        if (updated.status !== order.status) {
+          setOrder(updated)
+          // Haptic feedback when status changes to completed
+          if (updated.status === OrderStatus.COMPLETED || updated.status === 'completed') {
+            navigator.vibrate?.([100, 50, 100])
+          }
+        }
+      } catch (err) {
+        // Silently fail polling - don't disrupt user experience
+      }
+    }
+
+    pollingRef.current = setInterval(pollStatus, 1000) // 1 second polling
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
+  }, [order?.id, order?.status, isCompleted])
+
+  // Manage wake lock based on QR visibility
+  useEffect(() => {
+    if (order?.qr_code && !isCompleted) {
+      enableWakeLock()
+    } else {
+      disableWakeLock()
+    }
+
+    return () => {
+      disableWakeLock()
+    }
+  }, [order?.qr_code, isCompleted, enableWakeLock, disableWakeLock])
+
+  // Initial fetch
   useEffect(() => {
     if (!sessionId) {
       setError('No session ID found')
@@ -36,11 +125,10 @@ export default function OrderSuccessPage() {
         if (!orderData.qr_code && retryCount < 5) {
           setTimeout(() => {
             setRetryCount(prev => prev + 1)
-          }, 2000) // Retry every 2 seconds
+          }, 2000)
         }
       } catch (err: any) {
         if (retryCount < 3) {
-          // Webhook might not have processed yet, retry
           setTimeout(() => {
             setRetryCount(prev => prev + 1)
           }, 2000)
@@ -86,6 +174,65 @@ export default function OrderSuccessPage() {
     )
   }
 
+  // Order completed view
+  if (isCompleted) {
+    return (
+      <div className="min-h-screen pb-16 bg-[#0a0a0a] flex flex-col items-center justify-center px-6">
+        {/* Completed Icon */}
+        <div className="relative mb-6">
+          <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center animate-pulse">
+            <PartyPopper className="h-10 w-10 text-emerald-400" />
+          </div>
+        </div>
+
+        <h1 className="text-2xl font-bold text-white text-center mb-2">
+          Order Complete!
+        </h1>
+        
+        <p className="text-white/50 text-center text-sm mb-8">
+          Your drinks are ready. Enjoy! 🎉
+        </p>
+
+        {/* Order Summary */}
+        {order && (
+          <div className="w-full max-w-xs mb-8">
+            <div className="bg-white/[0.04] rounded-xl p-4 space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-white/40">Order</span>
+                <span className="text-white/60 font-mono">#{order.id.slice(0, 8)}</span>
+              </div>
+              {order.items?.map((item) => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <span className="text-white/60">
+                    {item.quantity}× {item.drink_name}
+                  </span>
+                  <span className="text-white/40 tabular-nums">
+                    ${(parseFloat(item.price_at_purchase) * item.quantity).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+              <div className="border-t border-white/10 pt-2 flex justify-between">
+                <span className="text-white/60 font-medium">Total</span>
+                <span className="text-white font-bold tabular-nums">
+                  ${parseFloat(order.total_amount).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Back Button */}
+        <button
+          onClick={() => router.push('/clubs')}
+          className="w-full max-w-xs py-3.5 rounded-full bg-white text-black font-semibold text-[15px] hover:bg-white/90 transition-colors"
+        >
+          Order More
+        </button>
+      </div>
+    )
+  }
+
+  // QR Code view (default - waiting for bartender)
   return (
     <div className="min-h-screen pb-16 bg-[#0a0a0a] flex flex-col items-center justify-center px-6">
       {/* Success Header */}
@@ -113,9 +260,12 @@ export default function OrderSuccessPage() {
         <p className="text-white/40 text-sm mb-6">{order.club_name}</p>
       )}
 
-      {/* QR Code - Optimized for fast scanning */}
+      {/* QR Code - Brightness boosted container */}
       {order?.qr_code ? (
-        <div className="bg-white rounded-2xl p-4 mb-6">
+        <div 
+          className="bg-white rounded-2xl p-4 mb-6"
+          style={{ filter: 'brightness(1.15)' }} // Slight brightness boost for dark environments
+        >
           <QRCodeSVG
             value={order.qr_code}
             size={260}
@@ -172,6 +322,14 @@ export default function OrderSuccessPage() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Polling indicator */}
+      {order?.qr_code && !isCompleted && (
+        <p className="text-[10px] text-white/20 mb-4 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+          Waiting for bartender...
+        </p>
       )}
 
       {/* Actions */}

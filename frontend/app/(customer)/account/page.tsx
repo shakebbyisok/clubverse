@@ -66,11 +66,10 @@ export default function AccountPage() {
         <ElegantList
           items={accountMenuItems}
           onItemClick={(item) => {
-            // Handle navigation when implemented
             if (item.id === 'edit-profile') {
-              // router.push('/account/edit')
+              // TODO: Implement edit profile
             } else if (item.id === 'order-history') {
-              // router.push('/account/orders')
+              router.push('/account/orders')
             }
           }}
           showChevron={true}

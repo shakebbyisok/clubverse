@@ -547,7 +547,10 @@ export default function ClubDrinksPage() {
           {createdOrder?.qr_code && (
             <>
               <div className="p-5">
-                <div className="bg-white rounded-2xl p-3 flex items-center justify-center">
+                <div 
+                  className="bg-white rounded-2xl p-3 flex items-center justify-center"
+                  style={{ filter: 'brightness(1.15)' }} // Brightness boost for dark clubs
+                >
                   <QRCodeSVG
                     value={createdOrder.qr_code}
                     size={200}
