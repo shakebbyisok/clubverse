@@ -1,6 +1,11 @@
 import { apiClient } from './client'
 import { Order, OrderCreate, OrderStatusUpdate } from '@/types'
 
+export interface PaginatedOrders {
+  orders: Order[]
+  has_more: boolean
+}
+
 export const ordersApi = {
   /**
    * Create new order (customer)
@@ -27,10 +32,12 @@ export const ordersApi = {
   },
 
   /**
-   * Get current user's orders
+   * Get current user's orders (paginated)
+   * @param skip - Number of orders to skip (for pagination)
+   * @param limit - Number of orders to fetch (default 20)
    */
-  getMyOrders: async (skip: number = 0, limit: number = 50): Promise<Order[]> => {
-    const response = await apiClient.get<Order[]>('/orders/me/history', {
+  getMyOrders: async (skip: number = 0, limit: number = 20): Promise<PaginatedOrders> => {
+    const response = await apiClient.get<PaginatedOrders>('/orders/me/history', {
       params: { skip, limit },
     })
     return response.data
@@ -44,4 +51,3 @@ export const ordersApi = {
     return response.data
   },
 }
-

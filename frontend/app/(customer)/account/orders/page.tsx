@@ -6,6 +6,7 @@ import { ordersApi } from '@/lib/api/orders'
 import { Order, OrderStatus } from '@/types'
 import { ClubverseLoader } from '@/components/common/clubverse-loader'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { QRCodeSVG } from 'qrcode.react'
 import { 
   ArrowLeft, 
@@ -17,7 +18,8 @@ import {
   Package,
   CreditCard,
   Banknote,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
@@ -46,10 +48,14 @@ const STATUS_CONFIG: Record<string, { icon: any; color: string; label: string }>
   cancelled: { icon: XCircle, color: 'text-red-500', label: 'Cancelled' },
 }
 
+const PAGE_SIZE = 20
+
 export default function CustomerOrdersPage() {
   const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
@@ -90,11 +96,13 @@ export default function CustomerOrdersPage() {
     }
   }, [selectedOrder, enableWakeLock, disableWakeLock])
 
-  const loadOrders = async (showRefresh = false) => {
+  // Initial load - first page
+  const loadInitialOrders = async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true)
     try {
-      const data = await ordersApi.getMyOrders()
-      setOrders(data)
+      const data = await ordersApi.getMyOrders(0, PAGE_SIZE)
+      setOrders(data.orders)
+      setHasMore(data.has_more)
     } catch (error) {
       console.error('Failed to load orders:', error)
     } finally {
@@ -103,17 +111,55 @@ export default function CustomerOrdersPage() {
     }
   }
 
-  useEffect(() => {
-    loadOrders()
+  // Load more orders (pagination)
+  const loadMoreOrders = async () => {
+    if (isLoadingMore || !hasMore) return
+    
+    setIsLoadingMore(true)
+    try {
+      const data = await ordersApi.getMyOrders(orders.length, PAGE_SIZE)
+      setOrders(prev => [...prev, ...data.orders])
+      setHasMore(data.has_more)
+    } catch (error) {
+      console.error('Failed to load more orders:', error)
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }
 
-    // Poll for updates every 5 seconds
-    pollingRef.current = setInterval(() => loadOrders(), 5000)
+  // Refresh active orders only (for status updates)
+  const refreshActiveOrders = async () => {
+    // Only refresh first page to check for status updates on active orders
+    try {
+      const data = await ordersApi.getMyOrders(0, PAGE_SIZE)
+      setOrders(prev => {
+        // Merge: update existing orders, prepend new ones
+        const existingIds = new Set(prev.map(o => o.id))
+        const newOrders = data.orders.filter(o => !existingIds.has(o.id))
+        const updatedOrders = prev.map(order => {
+          const updated = data.orders.find(o => o.id === order.id)
+          return updated || order
+        })
+        return [...newOrders, ...updatedOrders]
+      })
+      setHasMore(data.has_more || orders.length > PAGE_SIZE)
+    } catch (error) {
+      // Silently fail polling
+    }
+  }
+
+  useEffect(() => {
+    loadInitialOrders()
+
+    // Poll for updates every 10 seconds (less aggressive than before)
+    pollingRef.current = setInterval(refreshActiveOrders, 10000)
 
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Update selected order when orders change (for status updates)
@@ -156,7 +202,7 @@ export default function CustomerOrdersPage() {
           </button>
           <h1 className="text-lg font-semibold text-white">My Orders</h1>
           <button
-            onClick={() => loadOrders(true)}
+            onClick={() => loadInitialOrders(true)}
             className="ml-auto p-2 rounded-full hover:bg-white/[0.06] transition-colors"
             disabled={isRefreshing}
           >
@@ -181,82 +227,105 @@ export default function CustomerOrdersPage() {
             </button>
           </div>
         ) : (
-          orders.map((order) => {
-            const config = getStatusConfig(order.status as string)
-            const StatusIcon = config.icon
-            const showQR = canShowQR(order)
-            
-            return (
-              <div
-                key={order.id}
-                className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]"
-              >
-                {/* Order Header */}
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="text-white/40 text-[11px] uppercase tracking-wider">
-                      {order.club_name || 'Order'}
-                    </p>
-                    <p className="text-white font-mono text-sm">
-                      #{order.id.slice(0, 8)}
-                    </p>
+          <>
+            {orders.map((order) => {
+              const config = getStatusConfig(order.status as string)
+              const StatusIcon = config.icon
+              const showQR = canShowQR(order)
+              
+              return (
+                <div
+                  key={order.id}
+                  className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]"
+                >
+                  {/* Order Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className="text-white/40 text-[11px] uppercase tracking-wider">
+                        {order.club_name || 'Order'}
+                      </p>
+                      <p className="text-white font-mono text-sm">
+                        #{order.id.slice(0, 8)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {order.payment_method === 'cash' ? (
+                        <Banknote className="h-3.5 w-3.5 text-amber-500/60" />
+                      ) : (
+                        <CreditCard className="h-3.5 w-3.5 text-blue-500/60" />
+                      )}
+                      <div className={cn("flex items-center gap-1.5 text-xs", config.color)}>
+                        <StatusIcon className="h-3.5 w-3.5" />
+                        <span>{config.label}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {order.payment_method === 'cash' ? (
-                      <Banknote className="h-3.5 w-3.5 text-amber-500/60" />
-                    ) : (
-                      <CreditCard className="h-3.5 w-3.5 text-blue-500/60" />
+
+                  {/* Items */}
+                  <div className="space-y-1.5 mb-3">
+                    {order.items?.slice(0, 3).map((item, idx) => (
+                      <div key={idx} className="flex justify-between text-sm">
+                        <span className="text-white/60">
+                          {item.quantity}× {item.drink_name}
+                        </span>
+                        <span className="text-white/40 tabular-nums">
+                          ${(parseFloat(item.price_at_purchase) * item.quantity).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                    {(order.items?.length || 0) > 3 && (
+                      <p className="text-white/30 text-xs">
+                        +{order.items!.length - 3} more items
+                      </p>
                     )}
-                    <div className={cn("flex items-center gap-1.5 text-xs", config.color)}>
-                      <StatusIcon className="h-3.5 w-3.5" />
-                      <span>{config.label}</span>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                    <div>
+                      <p className="text-white font-semibold tabular-nums">
+                        ${parseFloat(order.total_amount).toFixed(2)}
+                      </p>
+                      <p className="text-white/30 text-[11px]">
+                        {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
+                      </p>
                     </div>
+                    
+                    {showQR && (
+                      <button
+                        onClick={() => setSelectedOrder(order)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black font-medium text-sm hover:bg-white/90 transition-colors"
+                      >
+                        <QrCode className="h-4 w-4" />
+                        Show QR
+                      </button>
+                    )}
                   </div>
                 </div>
+              )
+            })}
 
-                {/* Items */}
-                <div className="space-y-1.5 mb-3">
-                  {order.items?.slice(0, 3).map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-white/60">
-                        {item.quantity}× {item.drink_name}
-                      </span>
-                      <span className="text-white/40 tabular-nums">
-                        ${(parseFloat(item.price_at_purchase) * item.quantity).toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
-                  {(order.items?.length || 0) > 3 && (
-                    <p className="text-white/30 text-xs">
-                      +{order.items!.length - 3} more items
-                    </p>
+            {/* Load More Button */}
+            {hasMore && (
+              <div className="pt-2">
+                <Button
+                  onClick={loadMoreOrders}
+                  disabled={isLoadingMore}
+                  variant="outline"
+                  className="w-full border-white/10 text-white/60 hover:text-white hover:bg-white/[0.06]"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    'Load More Orders'
                   )}
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
-                  <div>
-                    <p className="text-white font-semibold tabular-nums">
-                      ${parseFloat(order.total_amount).toFixed(2)}
-                    </p>
-                    <p className="text-white/30 text-[11px]">
-                      {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
-                    </p>
-                  </div>
-                  
-                  {showQR && (
-                    <button
-                      onClick={() => setSelectedOrder(order)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black font-medium text-sm hover:bg-white/90 transition-colors"
-                    >
-                      <QrCode className="h-4 w-4" />
-                      Show QR
-                    </button>
-                  )}
-                </div>
+                </Button>
               </div>
-            )
-          })
+            )}
+          </>
         )}
       </div>
 
@@ -321,4 +390,3 @@ export default function CustomerOrdersPage() {
     </div>
   )
 }
-

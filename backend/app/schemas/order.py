@@ -119,3 +119,10 @@ class OrderStatusUpdate(BaseModel):
 class QRScanRequest(BaseModel):
     qr_code: str
 
+
+class PaginatedOrdersResponse(BaseModel):
+    """Paginated response for order lists"""
+    orders: List[OrderResponse]
+    has_more: bool
+    total: Optional[int] = None  # Optional total count
+

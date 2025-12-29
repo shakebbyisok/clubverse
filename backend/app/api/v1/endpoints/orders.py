@@ -8,7 +8,7 @@ from app.models.user import User
 from app.models.club import Club
 from app.models.drink import Drink
 from app.models.order import Order, OrderItem, OrderStatus, PaymentMethod
-from app.schemas.order import OrderCreate, OrderResponse, OrderItemResponse, OrderStatusUpdate
+from app.schemas.order import OrderCreate, OrderResponse, OrderItemResponse, OrderStatusUpdate, PaginatedOrdersResponse
 from app.core.dependencies import get_current_user
 from app.core.stripe_service import create_checkout_session
 from app.core.qr_service import generate_qr_code
@@ -297,17 +297,22 @@ def get_order_by_session(
     return OrderResponse(**order_dict)
 
 
-@router.get("/me/history", response_model=List[OrderResponse])
+@router.get("/me/history", response_model=PaginatedOrdersResponse)
 def get_my_orders(
     skip: int = 0,
-    limit: int = 50,
+    limit: int = 20,  # Reduced default for faster initial load
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get order history for current user."""
+    """Get paginated order history for current user. Most recent first."""
+    # Fetch limit + 1 to check if there are more
     orders = db.query(Order).filter(
         Order.customer_id == current_user.id
-    ).order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+    ).order_by(Order.created_at.desc()).offset(skip).limit(limit + 1).all()
+    
+    # Check if there are more orders
+    has_more = len(orders) > limit
+    orders = orders[:limit]  # Trim to actual limit
     
     result = []
     for order in orders:
@@ -342,5 +347,5 @@ def get_my_orders(
         order_dict["club_name"] = order.club.name if order.club else None
         result.append(OrderResponse(**order_dict))
     
-    return result
+    return PaginatedOrdersResponse(orders=result, has_more=has_more)
 
