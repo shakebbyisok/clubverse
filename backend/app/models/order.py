@@ -28,6 +28,7 @@ class Order(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     customer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     club_id = Column(UUID(as_uuid=True), ForeignKey("clubs.id"), nullable=False)
+    bartender_id = Column(UUID(as_uuid=True), ForeignKey("bartenders.id"), nullable=True)  # Assigned when scanned
     total_amount = Column(Numeric(10, 2), nullable=False)
     payment_method = Column(Enum(PaymentMethod), nullable=False, default=PaymentMethod.CARD)
     status = Column(Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING_PAYMENT)
@@ -40,6 +41,7 @@ class Order(Base):
     # Relationships
     customer = relationship("User", back_populates="orders")
     club = relationship("Club", back_populates="orders")
+    bartender = relationship("Bartender", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
 
 

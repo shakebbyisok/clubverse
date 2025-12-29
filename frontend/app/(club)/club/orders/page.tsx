@@ -118,14 +118,14 @@ export default function OrdersPage() {
   }
 
   const filteredOrders = useMemo(() => {
-    return statusFilter === 'all'
-      ? allOrders
+    return statusFilter === 'all' 
+      ? allOrders 
       : allOrders.filter(o => o.status === statusFilter)
   }, [allOrders, statusFilter])
-
+  
   const filteredCount = filteredOrders.length
   const totalPages = Math.ceil(filteredCount / PAGE_SIZE)
-
+  
   // Calculate displayed orders (no useEffect needed, just compute directly)
   const displayedOrders = useMemo(() => {
     const startIndex = (currentPage - 1) * PAGE_SIZE
@@ -138,35 +138,33 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="space-y-4 p-4 lg:space-y-6 lg:p-6">
+    <div className="space-y-6 p-6">
       {/* Actions */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:justify-between">
-        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <Tabs value={statusFilter} onValueChange={(v) => {
-            setStatusFilter(v)
-            setCurrentPage(1)
-          }}>
-            <TabsList className="bg-card/50 border border-border/40 h-9 w-max sm:w-auto">
-              {STATUS_TABS.map(tab => {
-                const count = tab.value === 'all'
-                  ? allOrders.length
-                  : allOrders.filter(o => o.status === tab.value).length
-                return (
-                  <TabsTrigger
-                    key={tab.value}
-                    value={tab.value}
-                    className="text-xs gap-1.5 h-7 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                  >
-                    {tab.label}
-                    {count > 0 && (
-                      <span className="text-[10px] opacity-70">({count})</span>
-                    )}
-                  </TabsTrigger>
-                )
-              })}
-            </TabsList>
-          </Tabs>
-        </div>
+      <div className="flex items-center justify-between">
+        <Tabs value={statusFilter} onValueChange={(v) => {
+          setStatusFilter(v)
+          setCurrentPage(1)
+        }}>
+          <TabsList className="bg-card/50 border border-border/40 h-9">
+            {STATUS_TABS.map(tab => {
+              const count = tab.value === 'all' 
+                ? allOrders.length 
+                : allOrders.filter(o => o.status === tab.value).length
+              return (
+                <TabsTrigger 
+                  key={tab.value} 
+                  value={tab.value}
+                  className="text-xs gap-1.5 h-7 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                >
+                  {tab.label}
+                  {count > 0 && (
+                    <span className="text-[10px] opacity-70">({count})</span>
+                  )}
+                </TabsTrigger>
+              )
+            })}
+          </TabsList>
+        </Tabs>
 
         <Button
           variant="outline"
@@ -188,7 +186,7 @@ export default function OrdersPage() {
               <ShoppingBag className="mx-auto h-10 w-10 text-muted-foreground/30" />
               <h3 className="mt-4 text-base font-medium">No orders</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {statusFilter === 'all'
+                {statusFilter === 'all' 
                   ? 'Orders will appear here'
                   : `No ${STATUS_LABELS[statusFilter]?.toLowerCase() || statusFilter} orders`}
               </p>
@@ -263,7 +261,7 @@ export default function OrdersPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row items-center gap-3 sm:justify-between px-4 py-3 border-t border-border/40 bg-muted/20">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border/40 bg-muted/20">
               <div className="text-xs text-muted-foreground">
                 Showing {(currentPage - 1) * PAGE_SIZE + 1} to {Math.min(currentPage * PAGE_SIZE, filteredCount)} of {filteredCount} orders
               </div>

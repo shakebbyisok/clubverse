@@ -35,6 +35,7 @@ interface DashboardLayoutProps {
   selectedClubId?: string | null
   onClubChange?: (clubId: string) => void
   onCreateClub?: () => void
+  showClubverseLogo?: boolean
 }
 
 export function DashboardLayout({ 
@@ -45,6 +46,7 @@ export function DashboardLayout({
   selectedClubId = null,
   onClubChange,
   onCreateClub,
+  showClubverseLogo = false,
 }: DashboardLayoutProps) {
   const { user, logout } = useAuth()
   const router = useRouter()
@@ -53,6 +55,9 @@ export function DashboardLayout({
   
   // Show club selector only for club owners
   const showClubSelector = user?.role === UserRole.CLUB_OWNER
+  
+  // Show Clubverse logo for club owners OR when explicitly requested
+  const useClubverseLogo = showClubSelector || showClubverseLogo
 
   // Find active page name from current pathname
   const activePage = navItems.find(item => {
@@ -89,35 +94,24 @@ export function DashboardLayout({
         <div className="flex-1 flex flex-col">
           {/* Logo/Brand */}
           <div className="h-12 flex items-center justify-center px-3 border-b border-border/40">
-            {showClubSelector ? (
-              <div className="flex items-center gap-2">
-                <Image 
-                  src="/assets/whiteicon.svg"
-                  alt="" 
-                  width={28}
-                  height={28}
-                  className="h-7 w-7 dark:invert-0 invert flex-shrink-0"
-                  unoptimized
-                />
-                <Image 
-                  src="/assets/whiteclubverse.svg"
-                  alt="Clubverse" 
-                  width={90}
-                  height={20}
-                  className="h-[18px] w-auto dark:invert-0 invert"
-                  unoptimized
-                />
-              </div>
-            ) : (
+            <div className="flex items-center gap-2">
               <Image 
-                src="/assets/previa/whiteprevia.svg" 
-                alt="La Previa" 
-                width={36}
-                height={36}
-                className="h-9 w-auto dark:invert-0 invert"
+                src="/assets/whiteicon.svg"
+                alt="" 
+                width={28}
+                height={28}
+                className="h-7 w-7 dark:invert-0 invert flex-shrink-0"
                 unoptimized
               />
-            )}
+              <Image 
+                src="/assets/whiteclubverse.svg"
+                alt="Clubverse" 
+                width={90}
+                height={20}
+                className="h-[18px] w-auto dark:invert-0 invert"
+                unoptimized
+              />
+            </div>
           </div>
 
           {/* Club Selector - Only for Club Owners */}
@@ -136,7 +130,9 @@ export function DashboardLayout({
           {/* Navigation */}
           <nav className="flex-1 px-2 py-4 space-y-0.5">
             {navItems.map((item) => {
-              const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== '/club')
+              // Exact match only, except for /club which matches nested routes
+              const isActive = pathname === item.href || 
+                (item.href === '/club' && pathname.startsWith('/club/'))
               return (
                 <Link
                   key={item.href}
@@ -188,35 +184,24 @@ export function DashboardLayout({
           <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
           <aside className="fixed inset-y-0 left-0 w-48 bg-card border-r border-border/40 flex flex-col">
             <div className="h-12 flex items-center justify-center px-3 border-b border-border/40 relative">
-              {showClubSelector ? (
-                <div className="flex items-center gap-2">
-                  <Image 
-                    src="/assets/whiteicon.svg"
-                    alt="" 
-                    width={28}
-                    height={28}
-                    className="h-7 w-7 dark:invert-0 invert flex-shrink-0"
-                    unoptimized
-                  />
-                  <Image 
-                    src="/assets/whiteclubverse.svg"
-                    alt="Clubverse" 
-                    width={90}
-                    height={20}
-                    className="h-[18px] w-auto dark:invert-0 invert"
-                    unoptimized
-                  />
-                </div>
-              ) : (
+              <div className="flex items-center gap-2">
                 <Image 
-                  src="/assets/previa/whiteprevia.svg" 
-                  alt="La Previa" 
-                  width={36}
-                  height={36}
-                  className="h-9 w-auto dark:invert-0 invert"
+                  src="/assets/whiteicon.svg"
+                  alt="" 
+                  width={28}
+                  height={28}
+                  className="h-7 w-7 dark:invert-0 invert flex-shrink-0"
                   unoptimized
                 />
-              )}
+                <Image 
+                  src="/assets/whiteclubverse.svg"
+                  alt="Clubverse" 
+                  width={90}
+                  height={20}
+                  className="h-[18px] w-auto dark:invert-0 invert"
+                  unoptimized
+                />
+              </div>
               <button onClick={() => setSidebarOpen(false)} className="absolute top-2 right-2 p-1.5">
                 <X className="h-4 w-4" />
               </button>
@@ -240,7 +225,9 @@ export function DashboardLayout({
 
             <nav className="flex-1 px-2 py-4 space-y-0.5">
               {navItems.map((item) => {
-                const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== '/club')
+                // Exact match only, except for /club which matches nested routes
+                const isActive = pathname === item.href || 
+                  (item.href === '/club' && pathname.startsWith('/club/'))
                 return (
                   <Link
                     key={item.href}

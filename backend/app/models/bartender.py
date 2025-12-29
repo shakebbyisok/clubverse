@@ -20,4 +20,5 @@ class Bartender(Base):
     # Relationships
     user = relationship("User", back_populates="bartender_profiles")
     club = relationship("Club", back_populates="bartenders")
+    orders = relationship("Order", back_populates="bartender")
 

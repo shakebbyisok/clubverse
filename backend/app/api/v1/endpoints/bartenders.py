@@ -18,16 +18,10 @@ def add_bartender(
     db: Session = Depends(get_db)
 ):
     """Add a bartender to a club (club owner only). Creates user if doesn't exist."""
-    from uuid import UUID
     from app.core.security import get_password_hash
     
-    try:
-        club_uuid = UUID(bartender_data.club_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid club ID format",
-        )
+    # Pydantic already validates and converts club_id to UUID
+    club_uuid = bartender_data.club_id
     
     # Verify club ownership
     club = db.query(Club).filter(
@@ -132,6 +126,41 @@ def list_bartenders(
         bartender_dict["user_name"] = bartender.user.full_name if bartender.user else None
         bartender_dict["user_email"] = bartender.user.email if bartender.user else None
         bartender_dict["club_name"] = club.name
+        result.append(BartenderResponse(**bartender_dict))
+    
+    return result
+
+
+@router.get("", response_model=List[BartenderResponse])
+def list_all_bartenders(
+    current_user: User = Depends(get_current_club_owner),
+    db: Session = Depends(get_db)
+):
+    """List all bartenders for all clubs owned by the current user."""
+    # Get all clubs owned by the user
+    owned_clubs = db.query(Club).filter(
+        Club.owner_id == current_user.id
+    ).all()
+    
+    if not owned_clubs:
+        return []
+    
+    club_ids = [club.id for club in owned_clubs]
+    
+    # Get all bartenders for these clubs
+    bartenders = db.query(Bartender).filter(
+        Bartender.club_id.in_(club_ids)
+    ).all()
+    
+    # Create a map of club_id -> club_name for quick lookup
+    club_map = {club.id: club.name for club in owned_clubs}
+    
+    result = []
+    for bartender in bartenders:
+        bartender_dict = BartenderResponse.model_validate(bartender).model_dump()
+        bartender_dict["user_name"] = bartender.user.full_name if bartender.user else None
+        bartender_dict["user_email"] = bartender.user.email if bartender.user else None
+        bartender_dict["club_name"] = club_map.get(bartender.club_id)
         result.append(BartenderResponse(**bartender_dict))
     
     return result

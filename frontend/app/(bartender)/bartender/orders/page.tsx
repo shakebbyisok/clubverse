@@ -2,11 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import { bartenderApi } from '@/lib/api/bartender'
-import { Order, PaymentMethod } from '@/types'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Order } from '@/types'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { CreditCard, DollarSign, CheckCircle2, ShoppingBag, Loader2 } from 'lucide-react'
+import { 
+  CreditCard, 
+  DollarSign, 
+  CheckCircle, 
+  ShoppingBag, 
+  Clock,
+  Package,
+  ChefHat
+} from 'lucide-react'
 import { ClubverseLoader } from '@/components/common/clubverse-loader'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
@@ -15,13 +22,11 @@ export default function BartenderOrdersPage() {
   const { toast } = useToast()
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [confirmingPayment, setConfirmingPayment] = useState<string | null>(null)
-  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null)
 
   useEffect(() => {
     loadOrders()
-    // Poll for new orders every 5 seconds
-    const interval = setInterval(loadOrders, 5000)
+    // Poll for updates
+    const interval = setInterval(loadOrders, 10000)
     return () => clearInterval(interval)
   }, [])
 
@@ -30,225 +35,222 @@ export default function BartenderOrdersPage() {
       const data = await bartenderApi.getOrders()
       setOrders(data)
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.response?.data?.detail || 'Failed to load orders',
-      })
+      if (!isLoading) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: error.response?.data?.detail || 'Failed to load orders',
+        })
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleConfirmPayment = async (orderId: string) => {
-    setConfirmingPayment(orderId)
-    try {
-      await bartenderApi.confirmCashPayment(orderId)
-      toast({
-        title: 'Payment confirmed',
-        description: 'Order marked as paid',
-      })
-      loadOrders()
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.response?.data?.detail || 'Failed to confirm payment',
-      })
-    } finally {
-      setConfirmingPayment(null)
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending_payment':
+        return <Clock className="h-4 w-4" />
+      case 'paid':
+        return <DollarSign className="h-4 w-4" />
+      case 'preparing':
+        return <ChefHat className="h-4 w-4" />
+      case 'ready':
+        return <Package className="h-4 w-4" />
+      case 'completed':
+        return <CheckCircle className="h-4 w-4" />
+      default:
+        return <ShoppingBag className="h-4 w-4" />
     }
   }
 
-  const handleStatusUpdate = async (orderId: string, status: string) => {
-    setUpdatingStatus(orderId)
-    try {
-      await bartenderApi.updateOrderStatus(orderId, status)
-      toast({
-        title: 'Status updated',
-      })
-      loadOrders()
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.response?.data?.detail || 'Failed to update status',
-      })
-    } finally {
-      setUpdatingStatus(null)
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'pending_payment':
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+      case 'paid':
+        return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+      case 'preparing':
+        return 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20'
+      case 'ready':
+        return 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
+      case 'completed':
+        return 'bg-muted text-muted-foreground'
+      default:
+        return 'bg-muted text-muted-foreground'
     }
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending_payment':
+        return 'Awaiting Payment'
+      case 'paid':
+        return 'Paid'
+      case 'preparing':
+        return 'Preparing'
+      case 'ready':
+        return 'Ready'
+      case 'completed':
+        return 'Completed'
+      default:
+        return status
+    }
+  }
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    })
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const today = new Date()
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today'
+    }
+    
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday'
+    }
+    
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    })
   }
 
   if (isLoading) {
     return <ClubverseLoader fullScreen />
   }
 
+  // Group orders by status
+  const activeOrders = orders.filter(o => !['completed', 'cancelled'].includes(o.status))
+  const completedOrders = orders.filter(o => o.status === 'completed')
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 p-4">
+      {/* Active Orders */}
       <div>
-        <h2 className="text-lg font-semibold">Orders</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Manage orders and confirm payments
-        </p>
-      </div>
-
-      {orders.length === 0 ? (
-        <Card className="border-border/40 bg-card/50 backdrop-blur-sm">
-          <CardContent className="py-12 text-center">
-            <ShoppingBag className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No orders at the moment</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {orders.map((order) => {
-            const isCashPending = order.payment_method === PaymentMethod.CASH && order.status === 'pending_payment'
-            const isPaid = order.status === 'paid'
-            const isPreparing = order.status === 'preparing'
-            const isReady = order.status === 'ready'
-
-            return (
-              <Card key={order.id} className="border-border/40 bg-card/50 backdrop-blur-sm">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-base">
-                        Order #{order.id.slice(0, 8)}
-                      </CardTitle>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-xs',
-                            order.payment_method === PaymentMethod.CASH
-                              ? 'border-amber-500/50 text-amber-600 dark:text-amber-400'
-                              : 'border-blue-500/50 text-blue-600 dark:text-blue-400'
-                          )}
-                        >
-                          {order.payment_method === PaymentMethod.CASH ? (
-                            <>
-                              <DollarSign className="h-3 w-3 mr-1" />
-                              Cash
-                            </>
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">
+          Active Orders ({activeOrders.length})
+        </h3>
+        
+        {activeOrders.length === 0 ? (
+          <Card className="border-border/40 bg-card/50">
+            <CardContent className="py-8 text-center">
+              <CheckCircle className="h-10 w-10 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No active orders</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Scan a QR code to get started</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {activeOrders.map((order) => (
+              <Card key={order.id} className="border-border/40 bg-card/50">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    {/* Left - Order Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge className={cn('text-xs gap-1', getStatusStyle(order.status))}>
+                          {getStatusIcon(order.status)}
+                          {getStatusLabel(order.status)}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {order.payment_method === 'cash' ? (
+                            <><DollarSign className="h-3 w-3 mr-1" />Cash</>
                           ) : (
-                            <>
-                              <CreditCard className="h-3 w-3 mr-1" />
-                              Card
-                            </>
+                            <><CreditCard className="h-3 w-3 mr-1" />Card</>
                           )}
                         </Badge>
-                        <Badge
-                          className={cn(
-                            'text-xs',
-                            isCashPending && 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-                            isPaid && 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20',
-                            isPreparing && 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-                            isReady && 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
-                          )}
-                        >
-                          {order.status === 'pending_payment' && 'Pending Payment'}
-                          {order.status === 'paid' && 'Paid'}
-                          {order.status === 'preparing' && 'Preparing'}
-                          {order.status === 'ready' && 'Ready'}
-                          {order.status === 'completed' && 'Completed'}
-                        </Badge>
+                      </div>
+                      
+                      {/* Items */}
+                      <div className="space-y-0.5">
+                        {order.items.map((item, idx) => (
+                          <p key={idx} className="text-sm">
+                            <span className="font-medium">{item.quantity}x</span>{' '}
+                            <span className="text-muted-foreground">{item.drink_name || 'Drink'}</span>
+                          </p>
+                        ))}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-lg font-semibold">
-                        ${parseFloat(order.total_amount).toFixed(2)}
-                      </div>
-                      {order.qr_code && (
-                        <div className="text-xs text-muted-foreground mt-0.5 font-mono">
-                          {order.qr_code.slice(0, 8)}...
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {/* Order Items */}
-                  <div className="space-y-1.5">
-                    {order.items.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          {item.quantity}x {item.drink_name || 'Unknown'}
-                        </span>
-                        <span className="font-medium">
-                          ${(parseFloat(item.price_at_purchase) * item.quantity).toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
 
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-2 border-t border-border/40">
-                    {isCashPending && (
-                      <Button
-                        onClick={() => handleConfirmPayment(order.id)}
-                        disabled={confirmingPayment === order.id}
-                        className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
-                      >
-                        {confirmingPayment === order.id ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            Confirming...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Confirm Cash Payment
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    {isPaid && (
-                      <Button
-                        onClick={() => handleStatusUpdate(order.id, 'preparing')}
-                        disabled={updatingStatus === order.id}
-                        className="flex-1 gap-2"
-                        size="sm"
-                      >
-                        {updatingStatus === order.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : null}
-                        Start Preparing
-                      </Button>
-                    )}
-                    {isPreparing && (
-                      <Button
-                        onClick={() => handleStatusUpdate(order.id, 'ready')}
-                        disabled={updatingStatus === order.id}
-                        className="flex-1 gap-2"
-                        size="sm"
-                      >
-                        {updatingStatus === order.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : null}
-                        Mark Ready
-                      </Button>
-                    )}
-                    {isReady && (
-                      <Button
-                        onClick={() => handleStatusUpdate(order.id, 'completed')}
-                        disabled={updatingStatus === order.id}
-                        className="flex-1 gap-2"
-                        size="sm"
-                      >
-                        {updatingStatus === order.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : null}
-                        Complete Order
-                      </Button>
-                    )}
+                    {/* Right - Price & Time */}
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-lg font-bold">
+                        ${parseFloat(String(order.total_amount)).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatTime(order.created_at)}
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            )
-          })}
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Completed Orders */}
+      {completedOrders.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">
+            Completed ({completedOrders.length})
+          </h3>
+          
+          <div className="space-y-2">
+            {completedOrders.slice(0, 10).map((order) => (
+              <Card key={order.id} className="border-border/40 bg-card/30 opacity-70">
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      <div>
+                        <p className="text-sm">
+                          {order.items.map((item, idx) => (
+                            <span key={idx}>
+                              {idx > 0 && ', '}
+                              {item.quantity}x {item.drink_name}
+                            </span>
+                          ))}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(order.created_at)} at {formatTime(order.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm font-medium">
+                      ${parseFloat(String(order.total_amount)).toFixed(2)}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
+      )}
+
+      {orders.length === 0 && (
+        <Card className="border-border/40 bg-card/50">
+          <CardContent className="py-12 text-center">
+            <ShoppingBag className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No orders yet</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">
+              Orders you scan will appear here
+            </p>
+          </CardContent>
+        </Card>
       )}
     </div>
   )
 }
-

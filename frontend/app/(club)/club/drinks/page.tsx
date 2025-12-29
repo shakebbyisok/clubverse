@@ -51,13 +51,13 @@ export default function DrinksPage() {
   const [isDeletingDrink, setIsDeletingDrink] = useState(false)
   const [togglingDrinkId, setTogglingDrinkId] = useState<string | null>(null)
   const [updatingCategoryDrinkId, setUpdatingCategoryDrinkId] = useState<string | null>(null)
-
+  
   // Categories for filtering
   const [systemCategories, setSystemCategories] = useState<Category[]>([])
   const [customCategories, setCustomCategories] = useState<Category[]>([])
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
-
+  
   const itemsPerPage = 20
   const { toast } = useToast()
 
@@ -68,13 +68,13 @@ export default function DrinksPage() {
         const club = await clubsApi.getMyClub()
         if (club && club.id) {
           setClubId(club.id)
-
+          
           const [clubDrinks, lists, categoryTree] = await Promise.all([
             drinksApi.getClubDrinks(club.id),
             drinkListsApi.getAll(),
             categoriesApi.getClubCategories(club.id),
           ])
-
+          
           setDrinks(clubDrinks)
           setDrinkLists(lists)
           setSystemCategories(categoryTree.system_categories)
@@ -156,19 +156,19 @@ export default function DrinksPage() {
   // Handle bulk delete
   const handleBulkDelete = async () => {
     if (selectedDrinks.size === 0) return
-
+    
     setIsDeletingBulk(true)
     try {
       // Delete each selected drink
       await Promise.all(
         Array.from(selectedDrinks).map(drinkId => drinksApi.delete(drinkId))
       )
-
+      
       toast({
         title: 'Success!',
         description: `Deleted ${selectedDrinks.size} drink${selectedDrinks.size > 1 ? 's' : ''}`,
       })
-
+      
       // Clear selection and reload
       setSelectedDrinks(new Set())
       await loadDrinks()
@@ -186,7 +186,7 @@ export default function DrinksPage() {
   // Handle single drink delete
   const handleDeleteDrink = async () => {
     if (!deletingDrink) return
-
+    
     setIsDeletingDrink(true)
     try {
       await drinksApi.delete(deletingDrink.id)
@@ -232,7 +232,7 @@ export default function DrinksPage() {
     const start = (currentPage - 1) * itemsPerPage
     return filteredDrinks.slice(start, start + itemsPerPage)
   }, [filteredDrinks, currentPage])
-
+  
   // All categories for the filter
   const allCategories = useMemo(() => {
     return [...systemCategories, ...customCategories]
@@ -243,27 +243,27 @@ export default function DrinksPage() {
   const handleCategoryChange = async (drink: Drink, categoryId: string | null) => {
     const category = allCategories.find(c => c.id === categoryId)
     const drinkId = drink.id
-
+    
     setUpdatingCategoryDrinkId(drinkId)
-
+    
     // Optimistic update - update UI immediately
-    setDrinks(prevDrinks =>
-      prevDrinks.map(d =>
-        d.id === drinkId ? {
-          ...d,
+    setDrinks(prevDrinks => 
+      prevDrinks.map(d => 
+        d.id === drinkId ? { 
+          ...d, 
           category_id: categoryId,
           category_name: category?.name || null,
           category: category?.name || null, // Also update legacy field for consistency
         } : d
       )
     )
-
+    
     try {
       await drinksApi.update(drinkId, {
         category: category?.name || null,
         category_id: categoryId,
       })
-
+      
       // Reload to ensure we have the latest data from backend
       await Promise.all([
         loadDrinks(),
@@ -271,17 +271,17 @@ export default function DrinksPage() {
       ])
     } catch (error: any) {
       // Revert on error
-      setDrinks(prevDrinks =>
-        prevDrinks.map(d =>
-          d.id === drinkId ? {
-            ...d,
+      setDrinks(prevDrinks => 
+        prevDrinks.map(d => 
+          d.id === drinkId ? { 
+            ...d, 
             category_id: drink.category_id,
             category_name: drink.category_name,
             category: drink.category,
           } : d
         )
       )
-
+      
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -296,21 +296,21 @@ export default function DrinksPage() {
   const handleToggleAvailability = async (drink: Drink) => {
     const newStatus = !drink.is_available
     const drinkId = drink.id
-
+    
     // Optimistic update - update UI immediately
-    setDrinks(prevDrinks =>
-      prevDrinks.map(d =>
+    setDrinks(prevDrinks => 
+      prevDrinks.map(d => 
         d.id === drinkId ? { ...d, is_available: newStatus } : d
       )
     )
-
+    
     setTogglingDrinkId(drinkId)
-
+    
     try {
       await drinksApi.update(drinkId, {
         is_available: newStatus,
       })
-
+      
       toast({
         title: 'Updated',
         description: `${drink.name} is now ${newStatus ? 'available' : 'unavailable'}`,
@@ -318,12 +318,12 @@ export default function DrinksPage() {
       })
     } catch (error: any) {
       // Revert on error
-      setDrinks(prevDrinks =>
-        prevDrinks.map(d =>
+      setDrinks(prevDrinks => 
+        prevDrinks.map(d => 
           d.id === drinkId ? { ...d, is_available: !newStatus } : d
         )
       )
-
+      
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -368,12 +368,12 @@ export default function DrinksPage() {
       width: '160px',
       cell: (drink) => {
         // Get category name from categories list if category_id is set, otherwise use drink.category_name
-        const categoryFromList = drink.category_id
+        const categoryFromList = drink.category_id 
           ? allCategories.find(c => c.id === drink.category_id)?.name
           : null
         const displayName = categoryFromList || drink.category_name || drink.category || null
         const isUpdating = updatingCategoryDrinkId === drink.id
-
+        
         return (
           <CategorySelect
             value={drink.category_id || null}
@@ -411,8 +411,8 @@ export default function DrinksPage() {
               'text-xs px-2 py-1 rounded-full transition-all cursor-pointer relative',
               'hover:opacity-80 active:scale-95 disabled:opacity-50 disabled:cursor-wait',
               'ring-2 ring-transparent',
-              drink.is_available
-                ? 'bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15'
+              drink.is_available 
+                ? 'bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15' 
                 : 'bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/15',
               isToggling && 'ring-primary/50 animate-pulse'
             )}
@@ -450,7 +450,7 @@ export default function DrinksPage() {
             <DropdownMenuItem onClick={() => setEditingDrink(drink)}>
               Edit
             </DropdownMenuItem>
-            <DropdownMenuItem
+            <DropdownMenuItem 
               className="text-destructive"
               onClick={() => setDeletingDrink(drink)}
             >
@@ -575,8 +575,8 @@ export default function DrinksPage() {
   return (
     <div className="space-y-6">
       {/* Header with Tabs */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 overflow-x-auto">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
             {tabs.map((tab) => (
               <button
@@ -597,7 +597,7 @@ export default function DrinksPage() {
               </button>
             ))}
           </div>
-
+          
           {/* Category filter and manage - only show on drinks tab */}
           {viewMode === 'drinks' && (
             <>
@@ -610,7 +610,7 @@ export default function DrinksPage() {
                 systemCategories={systemCategories}
                 customCategories={customCategories}
               />
-
+              
               {/* Manage categories button */}
               <Button
                 variant="ghost"
@@ -623,7 +623,7 @@ export default function DrinksPage() {
               </Button>
             </>
           )}
-
+          
           {/* Bulk delete button - only show when drinks are selected */}
           {viewMode === 'drinks' && selectedDrinks.size > 0 && (
             <Button
@@ -643,11 +643,11 @@ export default function DrinksPage() {
             </Button>
           )}
         </div>
-
+        
         <Button
           variant="default"
           onClick={viewMode === 'lists' ? handleCreateList : () => setIsAddDrinksModalOpen(true)}
-          className="gap-1.5 w-full sm:w-auto"
+          className="gap-1.5"
         >
           <Plus className="h-3.5 w-3.5" />
           {viewMode === 'lists' ? 'Create List' : 'Add Drinks'}

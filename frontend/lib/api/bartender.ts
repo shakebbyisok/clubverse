@@ -1,7 +1,35 @@
 import { apiClient } from './client'
 import { Order, BartenderClubInfo } from '@/types'
 
+export interface BartenderStats {
+  club_name: string | null
+  club_city: string | null
+  today_orders: number
+  pending_count: number
+  preparing_count: number
+  ready_count: number
+  completed_count: number
+  today_revenue: number
+  recent_orders: Array<{
+    id: string
+    customer_name: string
+    total_amount: number
+    status: string
+    items_count: number
+    payment_method: string
+    created_at: string
+  }>
+}
+
 export const bartenderApi = {
+  /**
+   * Get dashboard stats for the bartender
+   */
+  getStats: async (): Promise<BartenderStats> => {
+    const response = await apiClient.get<BartenderStats>('/bartender/stats')
+    return response.data
+  },
+
   /**
    * Get the club information for the current bartender
    */
@@ -40,6 +68,14 @@ export const bartenderApi = {
    */
   updateOrderStatus: async (orderId: string, status: string): Promise<Order> => {
     const response = await apiClient.put<Order>(`/bartender/orders/${orderId}/status`, { status })
+    return response.data
+  },
+
+  /**
+   * Mark order as given/completed (one-click complete)
+   */
+  markGiven: async (orderId: string): Promise<Order> => {
+    const response = await apiClient.post<Order>(`/bartender/orders/${orderId}/given`)
     return response.data
   },
 }

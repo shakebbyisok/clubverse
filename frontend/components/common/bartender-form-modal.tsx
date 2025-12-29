@@ -12,10 +12,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { BartenderCreate } from '@/types'
+import { BartenderCreate, Club } from '@/types'
 import { bartendersApi } from '@/lib/api/bartenders'
+import { clubsApi } from '@/lib/api/clubs'
 
 interface BartenderFormModalProps {
   open: boolean
@@ -32,6 +40,9 @@ export function BartenderFormModal({
 }: BartenderFormModalProps) {
   const { toast } = useToast()
   const [isSaving, setIsSaving] = useState(false)
+  const [selectedClubId, setSelectedClubId] = useState<string>(clubId)
+  const [clubs, setClubs] = useState<Club[]>([])
+  const [isLoadingClubs, setIsLoadingClubs] = useState(true)
   const [formData, setFormData] = useState<BartenderCreate>({
     club_id: clubId,
     email: '',
@@ -39,17 +50,45 @@ export function BartenderFormModal({
     full_name: '',
   })
 
-  // Reset form when modal opens/closes
+  // Load clubs when modal opens
   useEffect(() => {
     if (open) {
-      setFormData({
-        club_id: clubId,
-        email: '',
-        password: '',
-        full_name: '',
-      })
+      const fetchClubs = async () => {
+        setIsLoadingClubs(true)
+        try {
+          const myClubs = await clubsApi.getMyClubs()
+          setClubs(myClubs)
+          // Set selected club to the provided clubId or first club
+          const defaultClubId = clubId || myClubs[0]?.id
+          if (defaultClubId) {
+            setSelectedClubId(defaultClubId)
+            setFormData({
+              club_id: defaultClubId,
+              email: '',
+              password: '',
+              full_name: '',
+            })
+          }
+        } catch (error: any) {
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: error.response?.data?.detail || 'Failed to load clubs',
+          })
+        } finally {
+          setIsLoadingClubs(false)
+        }
+      }
+      fetchClubs()
     }
-  }, [open, clubId])
+  }, [open, clubId, toast])
+
+  // Update formData when selectedClubId changes
+  useEffect(() => {
+    if (selectedClubId) {
+      setFormData(prev => ({ ...prev, club_id: selectedClubId }))
+    }
+  }, [selectedClubId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -132,6 +171,37 @@ export function BartenderFormModal({
                 onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                 disabled={isSaving}
               />
+            </div>
+
+            {/* Club Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="club">Club</Label>
+              {isLoadingClubs ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <Select
+                  value={selectedClubId}
+                  onValueChange={setSelectedClubId}
+                  disabled={isSaving}
+                >
+                  <SelectTrigger id="club">
+                    <SelectValue placeholder="Select a club" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clubs.map((club) => (
+                      <SelectItem key={club.id} value={club.id}>
+                        {club.name}
+                        {club.city && ` - ${club.city}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Select the club this bartender should be associated with
+              </p>
             </div>
           </div>
           <DialogFooter className="px-6 pb-6">

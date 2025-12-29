@@ -11,6 +11,14 @@ export const bartendersApi = {
   },
 
   /**
+   * Get all bartenders for all clubs owned by the current user
+   */
+  getAll: async (): Promise<Bartender[]> => {
+    const response = await apiClient.get<Bartender[]>('/bartenders')
+    return response.data
+  },
+
+  /**
    * Get all bartenders for a club
    */
   getByClub: async (clubId: string): Promise<Bartender[]> => {

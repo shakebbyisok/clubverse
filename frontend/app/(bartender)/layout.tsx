@@ -1,7 +1,7 @@
 'use client'
 
 import { DashboardLayout } from '@/components/layouts/dashboard-layout'
-import { LayoutDashboard, ShoppingBag } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, QrCode } from 'lucide-react'
 import { useAuth } from '@/lib/providers/auth-provider'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
@@ -23,19 +23,24 @@ export default function BartenderLayout({ children }: { children: React.ReactNod
 
   const navItems = [
     {
+      label: 'Scan Order',
+      href: '/bartender/scan',
+      icon: <QrCode className="h-4 w-4" />,
+    },
+    {
       label: 'Dashboard',
       href: '/bartender',
       icon: <LayoutDashboard className="h-4 w-4" />,
     },
     {
-      label: 'Orders',
+      label: 'My Orders',
       href: '/bartender/orders',
       icon: <ShoppingBag className="h-4 w-4" />,
     },
   ]
 
   return (
-    <DashboardLayout navItems={navItems} title="Bartender Dashboard">
+    <DashboardLayout navItems={navItems} title="Bartender" showClubverseLogo>
       {children}
     </DashboardLayout>
   )

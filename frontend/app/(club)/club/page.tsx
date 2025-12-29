@@ -59,7 +59,7 @@ export default function ClubDashboardPage() {
   }
 
   return (
-    <div className="space-y-4 p-4 lg:space-y-6 lg:p-6">
+    <div className="space-y-6 p-6">
       {/* Actions */}
       <div className="flex items-center justify-end">
         <Button
@@ -75,7 +75,7 @@ export default function ClubDashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="Today's Revenue"
           value={`$${analytics?.today_revenue.toFixed(2) || '0.00'}`}
@@ -117,7 +117,7 @@ export default function ClubDashboardPage() {
       />
 
       {/* Bottom Row */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         {/* Top Drinks */}
         <TopDrinksChart
           data={analytics?.top_drinks || []}
@@ -132,7 +132,7 @@ export default function ClubDashboardPage() {
       </div>
 
       {/* Quick Stats Footer */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-8 py-4 border-t border-border/40">
+      <div className="flex items-center justify-center gap-8 py-4 border-t border-border/40">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Wine className="h-4 w-4" />
           <span>{analytics?.total_drinks || 0} drinks available</span>
