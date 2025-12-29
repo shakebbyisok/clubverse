@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { 
@@ -9,11 +8,11 @@ import {
   Camera, 
   CheckCircle, 
   DollarSign, 
-  ChevronUp, 
-  ChevronDown,
-  X,
+  ArrowLeft,
+  ArrowRight,
   Banknote,
-  CreditCard
+  CreditCard,
+  X
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Order } from '@/types'
@@ -35,32 +34,42 @@ interface NavigatorWithWakeLock {
   wakeLock?: WakeLock
 }
 
+type Mode = 'scanning' | 'processing'
+
+const COOLDOWN_MS = 1000 // 1 second cooldown between scans
+
 export default function ScanPage() {
   const { toast } = useToast()
-  const [isScanning, setIsScanning] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
   
-  // Batch scanning state
+  // Mode state
+  const [mode, setMode] = useState<Mode>('scanning')
+  
+  // Scanning state
+  const [isScanning, setIsScanning] = useState(false)
+  const [showScannedOverlay, setShowScannedOverlay] = useState(false)
   const [scannedOrders, setScannedOrders] = useState<Order[]>([])
+  
+  // Processing state
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
   const [isCompletingAll, setIsCompletingAll] = useState(false)
-  const [isTrayExpanded, setIsTrayExpanded] = useState(true)
   
+  // Refs
   const scannerRef = useRef<HTMLDivElement>(null)
   const html5QrCodeRef = useRef<any>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const isMountedRef = useRef(true)
-  const scannedQRsRef = useRef<Set<string>>(new Set()) // Track scanned QR codes to prevent duplicates
+  const scannedQRsRef = useRef<Set<string>>(new Set())
+  const lastScanTimeRef = useRef(0)
+  const isProcessingScanRef = useRef(false)
 
+  // Wake lock
   const enableWakeLock = useCallback(async () => {
     const nav = navigator as unknown as NavigatorWithWakeLock
-    if (nav.wakeLock) {
+    if (nav.wakeLock && !wakeLockRef.current) {
       try {
         const wakeLock = await nav.wakeLock.request('screen')
         wakeLockRef.current = wakeLock
-      } catch (err) {
-        console.log('Wake lock not supported:', err)
-      }
+      } catch (err) {}
     }
   }, [])
 
@@ -73,6 +82,7 @@ export default function ScanPage() {
     }
   }, [])
 
+  // Scanner controls
   const stopScanner = useCallback(async () => {
     if (html5QrCodeRef.current) {
       try {
@@ -130,39 +140,52 @@ export default function ScanPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast])
 
-  // Handle QR scan - adds to queue, camera keeps running
+  // Handle QR scan with cooldown and deduplication
   const handleQRCodeScanned = async (qrCode: string) => {
-    // Check if already scanned (duplicate prevention)
-    if (scannedQRsRef.current.has(qrCode)) {
-      return // Silently ignore duplicates
-    }
-
-    if (isProcessing) return
-
+    const now = Date.now()
+    
+    // Check 1: Cooldown
+    if (now - lastScanTimeRef.current < COOLDOWN_MS) return
+    
+    // Check 2: Already scanned in this session
+    if (scannedQRsRef.current.has(qrCode)) return
+    
+    // Check 3: Already processing a scan
+    if (isProcessingScanRef.current) return
+    
+    // Lock and set timestamp
+    isProcessingScanRef.current = true
+    lastScanTimeRef.current = now
+    scannedQRsRef.current.add(qrCode)
+    
     // Haptic feedback
     navigator.vibrate?.(50)
     
-    setIsProcessing(true)
+    // Show scanned overlay
+    setShowScannedOverlay(true)
     
     try {
       const order = await bartenderApi.scanQR(qrCode)
       
-      // Add to scanned set and orders array
-      scannedQRsRef.current.add(qrCode)
+      // Add to list
       setScannedOrders(prev => [...prev, order])
       
-      // Expand tray if collapsed
-      setIsTrayExpanded(true)
+      // Hide overlay after delay
+      setTimeout(() => {
+        setShowScannedOverlay(false)
+      }, 600)
       
-      // Brief visual feedback
-      toast({
-        title: `+1 Order`,
-        description: `${order.items?.map(i => `${i.quantity}× ${i.drink_name}`).join(', ') || 'Added to queue'}`,
-      })
     } catch (error: any) {
-      // Don't show error for already completed orders
+      // Remove from set if failed (allow retry)
+      scannedQRsRef.current.delete(qrCode)
+      
       const errorMsg = error.response?.data?.detail || 'Invalid QR code'
-      if (!errorMsg.includes('already')) {
+      
+      // Hide overlay
+      setShowScannedOverlay(false)
+      
+      // Only show error if not a duplicate/already completed
+      if (!errorMsg.toLowerCase().includes('already') && !errorMsg.toLowerCase().includes('completed')) {
         toast({
           variant: 'destructive',
           title: 'Scan Failed',
@@ -170,9 +193,23 @@ export default function ScanPage() {
         })
       }
     } finally {
-      setIsProcessing(false)
-      // Camera keeps running - no need to restart
+      isProcessingScanRef.current = false
     }
+  }
+
+  // Transition to processing mode
+  const handleDoneScanning = async () => {
+    await stopScanner()
+    setMode('processing')
+  }
+
+  // Go back to scanning mode
+  const handleBackToScan = async () => {
+    setMode('scanning')
+    // Don't clear orders - keep them
+    setTimeout(() => {
+      startScanner()
+    }, 100)
   }
 
   // Complete a single order
@@ -190,25 +227,20 @@ export default function ScanPage() {
       }
       await bartenderApi.markGiven(order.id)
       
-      // Remove from list with animation delay
-      setTimeout(() => {
-        setScannedOrders(prev => prev.filter(o => o.id !== order.id))
-        scannedQRsRef.current.delete(order.qr_code || '')
-        setCompletingIds(prev => {
-          const next = new Set(prev)
-          next.delete(order.id)
-          return next
-        })
-      }, 300)
+      // Remove from list
+      setScannedOrders(prev => prev.filter(o => o.id !== order.id))
+      scannedQRsRef.current.delete(order.qr_code || '')
       
       // Success haptic
       navigator.vibrate?.(100)
+      
     } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Error',
         description: error.response?.data?.detail || 'Failed to complete order',
       })
+    } finally {
       setCompletingIds(prev => {
         const next = new Set(prev)
         next.delete(order.id)
@@ -217,25 +249,17 @@ export default function ScanPage() {
     }
   }
 
-  // Complete all card-paid orders at once
-  const handleCompleteAll = async () => {
+  // Complete all card orders
+  const handleCompleteAllCard = async () => {
     const cardOrders = scannedOrders.filter(o => 
       o.payment_method !== 'cash' || o.status !== 'pending_payment'
     )
     
-    if (cardOrders.length === 0) {
-      toast({
-        variant: 'destructive',
-        title: 'No orders to complete',
-        description: 'Cash orders need individual confirmation',
-      })
-      return
-    }
+    if (cardOrders.length === 0) return
     
     setIsCompletingAll(true)
     
     try {
-      // Process all in parallel
       await Promise.all(cardOrders.map(async (order) => {
         setCompletingIds(prev => new Set(prev).add(order.id))
         await bartenderApi.markGiven(order.id)
@@ -248,6 +272,7 @@ export default function ScanPage() {
       
       // Success feedback
       navigator.vibrate?.([100, 50, 100])
+      
       toast({
         title: `${cardOrders.length} orders completed!`,
       })
@@ -264,10 +289,20 @@ export default function ScanPage() {
     }
   }
 
-  // Remove order from queue without completing
+  // Remove order from queue
   const handleRemoveOrder = (order: Order) => {
     setScannedOrders(prev => prev.filter(o => o.id !== order.id))
     scannedQRsRef.current.delete(order.qr_code || '')
+  }
+
+  // Start new session (clear all)
+  const handleNewSession = () => {
+    setScannedOrders([])
+    scannedQRsRef.current.clear()
+    setMode('scanning')
+    setTimeout(() => {
+      startScanner()
+    }, 100)
   }
 
   // Initial mount
@@ -284,252 +319,317 @@ export default function ScanPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Auto-restart camera on visibility/focus
+  // Auto-restart camera on visibility (only in scanning mode)
   useEffect(() => {
+    if (mode !== 'scanning') return
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !isScanning && !isProcessing) {
+      if (document.visibilityState === 'visible' && !isScanning) {
         startScanner()
       }
     }
 
     const handleFocus = () => {
       setTimeout(() => {
-        if (!isScanning && !isProcessing && isMountedRef.current) {
+        if (!isScanning && isMountedRef.current) {
           startScanner()
         }
       }, 100)
     }
 
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted && !isScanning && !isProcessing) {
-        startScanner()
-      }
-    }
-
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleFocus)
-    window.addEventListener('pageshow', handlePageShow)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
-      window.removeEventListener('pageshow', handlePageShow)
     }
-  }, [isScanning, isProcessing, startScanner])
+  }, [mode, isScanning, startScanner])
 
-  const pendingCashOrders = scannedOrders.filter(o => 
-    o.payment_method === 'cash' && o.status === 'pending_payment'
-  )
-  const completableOrders = scannedOrders.filter(o => 
-    o.payment_method !== 'cash' || o.status !== 'pending_payment'
-  )
+  // Calculate totals
+  const totalAmount = scannedOrders.reduce((sum, o) => sum + parseFloat(String(o.total_amount)), 0)
+  const cardOrders = scannedOrders.filter(o => o.payment_method !== 'cash' || o.status !== 'pending_payment')
+  const cashOrders = scannedOrders.filter(o => o.payment_method === 'cash' && o.status === 'pending_payment')
 
-  return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden">
-      {/* Order Tray */}
-      {scannedOrders.length > 0 && (
-        <div className="flex-shrink-0 bg-card border-b border-border/40">
-          {/* Tray Header */}
-          <button
-            onClick={() => setIsTrayExpanded(!isTrayExpanded)}
-            className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <span className="font-semibold">Orders</span>
-              <Badge variant="secondary" className="rounded-full">
-                {scannedOrders.length}
-              </Badge>
-              {pendingCashOrders.length > 0 && (
-                <Badge variant="outline" className="rounded-full text-amber-500 border-amber-500/30">
-                  {pendingCashOrders.length} cash
-                </Badge>
-              )}
+  // ============================================
+  // PROCESSING MODE UI
+  // ============================================
+  if (mode === 'processing') {
+    return (
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-background border-b border-border/40">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button
+              onClick={handleBackToScan}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Scan More
+            </button>
+            <h1 className="font-semibold">Process Orders</h1>
+            <div className="w-20" /> {/* Spacer */}
+          </div>
+        </div>
+
+        {/* Orders List */}
+        <div className="p-4 space-y-3 pb-32">
+          {scannedOrders.length === 0 ? (
+            <div className="text-center py-12">
+              <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
+              <p className="text-lg font-medium mb-1">All done!</p>
+              <p className="text-muted-foreground text-sm mb-4">No more orders to process</p>
+              <Button onClick={handleNewSession}>
+                <Camera className="h-4 w-4 mr-2" />
+                Start New Session
+              </Button>
             </div>
-            {isTrayExpanded ? (
-              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            )}
-          </button>
-
-          {/* Tray Content */}
-          {isTrayExpanded && (
-            <div className="max-h-48 overflow-y-auto px-3 pb-3 space-y-2">
-              {scannedOrders.map((order) => {
-                const isCash = order.payment_method === 'cash'
-                const isPendingPayment = order.status === 'pending_payment'
-                const isCompleting = completingIds.has(order.id)
-                
-                return (
-                  <div
-                    key={order.id}
-                    className={cn(
-                      "flex items-center gap-3 p-3 rounded-lg bg-muted/50 transition-all",
-                      isCompleting && "opacity-50 scale-95"
-                    )}
-                  >
-                    {/* Order Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-xs text-muted-foreground">
-                          #{order.id.slice(0, 6)}
-                        </span>
-                        {isCash ? (
-                          <Banknote className="h-3 w-3 text-amber-500" />
-                        ) : (
-                          <CreditCard className="h-3 w-3 text-blue-500" />
+          ) : (
+            scannedOrders.map((order) => {
+              const isCash = order.payment_method === 'cash'
+              const isPendingPayment = order.status === 'pending_payment'
+              const isCompleting = completingIds.has(order.id)
+              
+              return (
+                <div
+                  key={order.id}
+                  className={cn(
+                    "bg-card border border-border/40 rounded-xl p-4 transition-all",
+                    isCompleting && "opacity-50 scale-[0.98]"
+                  )}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm text-muted-foreground">
+                        #{order.id.slice(0, 8)}
+                      </span>
+                      <Badge 
+                        variant="outline" 
+                        className={cn(
+                          "text-xs",
+                          isCash 
+                            ? "border-amber-500/30 text-amber-500" 
+                            : "border-blue-500/30 text-blue-500"
                         )}
-                      </div>
-                      <p className="text-sm font-medium truncate">
-                        {order.items?.map(i => `${i.quantity}× ${i.drink_name}`).join(', ')}
-                      </p>
+                      >
+                        {isCash ? (
+                          <><Banknote className="h-3 w-3 mr-1" /> CASH</>
+                        ) : (
+                          <><CreditCard className="h-3 w-3 mr-1" /> CARD</>
+                        )}
+                      </Badge>
                     </div>
+                    <button
+                      onClick={() => handleRemoveOrder(order)}
+                      className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      disabled={isCompleting}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
 
-                    {/* Total */}
-                    <div className="text-right">
-                      <p className="font-bold tabular-nums">
+                  {/* Items */}
+                  <div className="space-y-1.5 mb-3">
+                    {order.items?.map((item, idx) => (
+                      <div key={idx} className="flex justify-between text-sm">
+                        <span>
+                          <span className="font-semibold text-primary">{item.quantity}×</span>{' '}
+                          {item.drink_name}
+                        </span>
+                        <span className="text-muted-foreground tabular-nums">
+                          ${(parseFloat(item.price_at_purchase) * item.quantity).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between pt-3 border-t border-border/40">
+                    <div>
+                      <p className="text-lg font-bold tabular-nums">
                         ${parseFloat(String(order.total_amount)).toFixed(2)}
                       </p>
                     </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-1">
-                      {/* Remove button */}
-                      <button
-                        onClick={() => handleRemoveOrder(order)}
-                        className="p-2 rounded-full hover:bg-background/50 text-muted-foreground hover:text-foreground transition-colors"
-                        disabled={isCompleting}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-
-                      {/* Complete button */}
-                      <button
-                        onClick={() => handleCompleteOrder(order)}
-                        disabled={isCompleting}
-                        className={cn(
-                          "p-2 rounded-full transition-colors",
-                          isCash && isPendingPayment
-                            ? "bg-amber-500 hover:bg-amber-600 text-white"
-                            : "bg-emerald-500 hover:bg-emerald-600 text-white"
-                        )}
-                      >
-                        {isCompleting ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : isCash && isPendingPayment ? (
+                    
+                    <Button
+                      onClick={() => handleCompleteOrder(order)}
+                      disabled={isCompleting}
+                      className={cn(
+                        "gap-2",
+                        isCash && isPendingPayment
+                          ? "bg-amber-500 hover:bg-amber-600"
+                          : "bg-emerald-500 hover:bg-emerald-600"
+                      )}
+                    >
+                      {isCompleting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : isCash && isPendingPayment ? (
+                        <>
                           <DollarSign className="h-4 w-4" />
-                        ) : (
+                          Cash Received
+                        </>
+                      ) : (
+                        <>
                           <CheckCircle className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
+                          Given
+                        </>
+                      )}
+                    </Button>
                   </div>
-                )
-              })}
-            </div>
+                </div>
+              )
+            })
           )}
         </div>
-      )}
 
+        {/* Complete All Button */}
+        {scannedOrders.length > 0 && (
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border/40">
+            {cardOrders.length > 0 && (
+              <Button
+                onClick={handleCompleteAllCard}
+                disabled={isCompletingAll}
+                className="w-full h-14 text-lg font-bold gap-2 bg-emerald-500 hover:bg-emerald-600 mb-2"
+              >
+                {isCompletingAll ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <CheckCircle className="h-5 w-5" />
+                    COMPLETE ALL CARD ({cardOrders.length})
+                  </>
+                )}
+              </Button>
+            )}
+            {cashOrders.length > 0 && (
+              <p className="text-center text-xs text-muted-foreground">
+                {cashOrders.length} cash order{cashOrders.length > 1 ? 's' : ''} need individual confirmation
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ============================================
+  // SCANNING MODE UI
+  // ============================================
+  return (
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Scanner */}
-      <div className="flex-1 min-h-0">
-        <Card className="h-full border-0 rounded-none bg-transparent">
-          <CardContent className="p-0 h-full">
-            <div className="relative h-full">
-              <div
-                id="qr-scanner-page"
-                ref={scannerRef}
-                className="w-full h-full bg-black"
-              />
-              
-              {/* Loading overlay */}
-              {!isScanning && !isProcessing && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-                  <div className="text-center text-white">
-                    <Loader2 className="h-12 w-12 mx-auto mb-2 animate-spin" />
-                    <p className="text-sm">Starting camera...</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Processing overlay - brief flash */}
-              {isProcessing && (
-                <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/20 pointer-events-none">
-                  <div className="w-24 h-24 rounded-full bg-emerald-500/30 flex items-center justify-center animate-ping">
-                    <CheckCircle className="h-12 w-12 text-emerald-400" />
-                  </div>
-                </div>
-              )}
-
-              {/* Scanning frame */}
-              {isScanning && !isProcessing && (
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div className="border-2 border-primary rounded-lg w-[70%] max-w-[300px] aspect-square relative">
-                    <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-primary rounded-tl-lg" />
-                    <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-primary rounded-tr-lg" />
-                    <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-primary rounded-bl-lg" />
-                    <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-primary rounded-br-lg" />
-                  </div>
-                </div>
-              )}
-
-              {/* Scan hint */}
-              <div className="absolute bottom-4 left-0 right-0 text-center">
-                <p className="text-white/60 text-sm bg-black/50 inline-block px-4 py-2 rounded-full">
-                  {scannedOrders.length > 0 
-                    ? `${scannedOrders.length} scanned • Keep scanning`
-                    : 'Point at QR code'
-                  }
-                </p>
-              </div>
+      <div className="relative flex-shrink-0 aspect-square max-h-[50vh] bg-black">
+        <div
+          id="qr-scanner-page"
+          ref={scannerRef}
+          className="w-full h-full"
+        />
+        
+        {/* Loading overlay */}
+        {!isScanning && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+            <div className="text-center text-white">
+              <Loader2 className="h-12 w-12 mx-auto mb-2 animate-spin" />
+              <p className="text-sm">Starting camera...</p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        )}
+
+        {/* Scanned overlay */}
+        {showScannedOverlay && (
+          <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/90 z-10">
+            <div className="text-center text-white">
+              <CheckCircle className="h-16 w-16 mx-auto mb-2" />
+              <p className="text-xl font-bold">Scanned!</p>
+            </div>
+          </div>
+        )}
+
+        {/* Scanning frame */}
+        {isScanning && !showScannedOverlay && (
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="border-2 border-white/80 rounded-lg w-[70%] max-w-[280px] aspect-square relative">
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-lg" />
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-lg" />
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-lg" />
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-lg" />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Complete All Button */}
-      {scannedOrders.length > 0 && (
-        <div className="flex-shrink-0 p-4 bg-background border-t border-border/40">
-          <Button
-            onClick={handleCompleteAll}
-            disabled={isCompletingAll || completableOrders.length === 0}
-            className={cn(
-              "w-full h-14 text-lg font-bold gap-2",
-              completableOrders.length > 0
-                ? "bg-emerald-500 hover:bg-emerald-600"
-                : "bg-muted"
-            )}
-          >
-            {isCompletingAll ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <>
-                <CheckCircle className="h-5 w-5" />
-                {completableOrders.length > 0 
-                  ? `COMPLETE ALL (${completableOrders.length})`
-                  : `${pendingCashOrders.length} CASH - TAP INDIVIDUALLY`
-                }
-              </>
-            )}
-          </Button>
-          
-          {pendingCashOrders.length > 0 && completableOrders.length > 0 && (
-            <p className="text-center text-xs text-muted-foreground mt-2">
-              {pendingCashOrders.length} cash order{pendingCashOrders.length > 1 ? 's' : ''} need individual confirmation
-            </p>
+      {/* Summary bar */}
+      <div className="flex-shrink-0 bg-card border-y border-border/40 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold">{scannedOrders.length}</span>
+            <div className="text-sm">
+              <p className="font-medium">orders scanned</p>
+              {scannedOrders.length > 0 && (
+                <p className="text-muted-foreground">${totalAmount.toFixed(2)} total</p>
+              )}
+            </div>
+          </div>
+          {cashOrders.length > 0 && (
+            <Badge variant="outline" className="border-amber-500/30 text-amber-500">
+              {cashOrders.length} cash
+            </Badge>
           )}
         </div>
-      )}
+      </div>
 
-      {/* Start Camera Button (fallback) */}
-      {!isScanning && scannedOrders.length === 0 && (
-        <div className="flex-shrink-0 p-4">
-          <Button className="w-full" onClick={startScanner}>
-            <Camera className="h-4 w-4 mr-2" />
-            Start Camera
-          </Button>
-        </div>
-      )}
+      {/* Scanned orders list */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        {scannedOrders.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <p className="text-sm">Point camera at customer QR codes</p>
+            <p className="text-xs mt-1">Orders will appear here</p>
+          </div>
+        ) : (
+          scannedOrders.map((order) => {
+            const isCash = order.payment_method === 'cash'
+            
+            return (
+              <div
+                key={order.id}
+                className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-mono text-xs text-muted-foreground">
+                      #{order.id.slice(0, 6)}
+                    </span>
+                    {isCash ? (
+                      <Banknote className="h-3 w-3 text-amber-500" />
+                    ) : (
+                      <CreditCard className="h-3 w-3 text-blue-500" />
+                    )}
+                  </div>
+                  <p className="text-sm truncate">
+                    {order.items?.map(i => `${i.quantity}× ${i.drink_name}`).join(', ')}
+                  </p>
+                </div>
+                <p className="font-bold tabular-nums">
+                  ${parseFloat(String(order.total_amount)).toFixed(2)}
+                </p>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {/* Done Scanning button */}
+      <div className="flex-shrink-0 p-4 bg-background border-t border-border/40">
+        <Button
+          onClick={handleDoneScanning}
+          disabled={scannedOrders.length === 0}
+          className="w-full h-14 text-lg font-bold gap-2"
+        >
+          <ArrowRight className="h-5 w-5" />
+          DONE SCANNING ({scannedOrders.length})
+        </Button>
+      </div>
     </div>
   )
 }
