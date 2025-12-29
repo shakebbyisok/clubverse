@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ordersApi } from '../api/orders'
+import { ordersApi, PaginatedOrders } from '../api/orders'
 import { Order, OrderCreate, OrderStatusUpdate } from '@/types'
 import { toast } from '@/hooks/use-toast'
 
@@ -25,14 +25,27 @@ export function useOrder(orderId: string) {
 }
 
 /**
- * Get current user's orders
+ * Get current user's orders (paginated)
+ * Returns { orders, has_more } from the API
  */
-export function useMyOrders(skip: number = 0, limit: number = 50) {
-  return useQuery({
+export function useMyOrders(skip: number = 0, limit: number = 20) {
+  return useQuery<PaginatedOrders>({
     queryKey: [...orderKeys.myOrders(), skip, limit],
     queryFn: () => ordersApi.getMyOrders(skip, limit),
     staleTime: 30000,
   })
+}
+
+/**
+ * Get just the orders array (convenience hook for simple usage)
+ * Use this when you only need the orders and don't care about pagination
+ */
+export function useMyOrdersList(limit: number = 20) {
+  const query = useMyOrders(0, limit)
+  return {
+    ...query,
+    data: query.data?.orders ?? [],
+  }
 }
 
 /**
@@ -89,4 +102,3 @@ export function useUpdateOrderStatus() {
     },
   })
 }
-

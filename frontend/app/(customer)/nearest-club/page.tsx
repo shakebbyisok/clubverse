@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useClubs } from '@/lib/queries/use-clubs'
 import { useGeolocation } from '@/hooks/use-geolocation'
-import { useMyOrders } from '@/lib/queries/use-orders'
+import { useMyOrdersList } from '@/lib/queries/use-orders'
 import { useUserClubs } from '@/lib/queries/use-user-clubs'
 import { PartnerClubCard } from '@/components/common/partner-club-card'
 import { StaticMapBackground } from '@/components/map/static-map-background'
@@ -17,7 +17,7 @@ export default function NearestClubPage() {
   const { data: clubs, isLoading, error } = useClubs()
   const { data: userClubs } = useUserClubs()
   const { latitude, longitude, error: geoError } = useGeolocation()
-  const { data: orders } = useMyOrders(0, 1) // Get most recent order
+  const { data: orders } = useMyOrdersList(1) // Get most recent order
 
   const userLocation = latitude && longitude ? { lat: latitude, lng: longitude } : null
 
