@@ -36,7 +36,7 @@ interface NavigatorWithWakeLock {
 
 type Mode = 'scanning' | 'processing'
 
-const COOLDOWN_MS = 1000 // 1 second cooldown between scans
+const COOLDOWN_MS = 100 // Minimal cooldown - just prevents same-frame duplicates
 
 export default function ScanPage() {
   const { toast } = useToast()
@@ -60,7 +60,6 @@ export default function ScanPage() {
   const isMountedRef = useRef(true)
   const scannedQRsRef = useRef<Set<string>>(new Set())
   const lastScanTimeRef = useRef(0)
-  const isProcessingScanRef = useRef(false)
 
   // Wake lock
   const enableWakeLock = useCallback(async () => {
@@ -140,61 +139,47 @@ export default function ScanPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast])
 
-  // Handle QR scan with cooldown and deduplication
-  const handleQRCodeScanned = async (qrCode: string) => {
+  // Handle QR scan - instant with Set-based deduplication
+  const handleQRCodeScanned = (qrCode: string) => {
     const now = Date.now()
     
-    // Check 1: Cooldown
+    // Check 1: Minimal cooldown (prevents same-frame rapid fire)
     if (now - lastScanTimeRef.current < COOLDOWN_MS) return
     
-    // Check 2: Already scanned in this session
+    // Check 2: Already scanned in this session - THIS IS THE KEY CHECK
     if (scannedQRsRef.current.has(qrCode)) return
     
-    // Check 3: Already processing a scan
-    if (isProcessingScanRef.current) return
-    
-    // Lock and set timestamp
-    isProcessingScanRef.current = true
+    // Immediately add to Set and update timestamp (blocks duplicates instantly)
     lastScanTimeRef.current = now
     scannedQRsRef.current.add(qrCode)
     
-    // Haptic feedback
-    navigator.vibrate?.(50)
+    // Haptic feedback - instant
+    navigator.vibrate?.(30)
     
-    // Show scanned overlay
+    // Flash overlay briefly
     setShowScannedOverlay(true)
+    setTimeout(() => setShowScannedOverlay(false), 120)
     
-    try {
-      const order = await bartenderApi.scanQR(qrCode)
-      
-      // Add to list
-      setScannedOrders(prev => [...prev, order])
-      
-      // Hide overlay after delay
-      setTimeout(() => {
-        setShowScannedOverlay(false)
-      }, 600)
-      
-    } catch (error: any) {
-      // Remove from set if failed (allow retry)
-      scannedQRsRef.current.delete(qrCode)
-      
-      const errorMsg = error.response?.data?.detail || 'Invalid QR code'
-      
-      // Hide overlay
-      setShowScannedOverlay(false)
-      
-      // Only show error if not a duplicate/already completed
-      if (!errorMsg.toLowerCase().includes('already') && !errorMsg.toLowerCase().includes('completed')) {
-        toast({
-          variant: 'destructive',
-          title: 'Scan Failed',
-          description: errorMsg,
-        })
-      }
-    } finally {
-      isProcessingScanRef.current = false
-    }
+    // Fetch order in background - doesn't block next scan
+    bartenderApi.scanQR(qrCode)
+      .then(order => {
+        setScannedOrders(prev => [...prev, order])
+      })
+      .catch(error => {
+        // Remove from set if failed (allow retry)
+        scannedQRsRef.current.delete(qrCode)
+        
+        const errorMsg = error.response?.data?.detail || 'Invalid QR code'
+        
+        // Only show error if not a duplicate/already completed
+        if (!errorMsg.toLowerCase().includes('already') && !errorMsg.toLowerCase().includes('completed')) {
+          toast({
+            variant: 'destructive',
+            title: 'Scan Failed',
+            description: errorMsg,
+          })
+        }
+      })
   }
 
   // Transition to processing mode
