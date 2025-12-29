@@ -36,6 +36,15 @@ interface NavigatorWithWakeLock {
 
 type Mode = 'scanning' | 'processing'
 
+// Pending order placeholder (shown while API is loading)
+interface PendingOrder {
+  qrCode: string
+  isPending: true
+}
+
+// Union type for orders in the list
+type ScannedItem = Order | PendingOrder
+
 const COOLDOWN_MS = 100 // Minimal cooldown - just prevents same-frame duplicates
 
 export default function ScanPage() {
@@ -47,7 +56,7 @@ export default function ScanPage() {
   // Scanning state
   const [isScanning, setIsScanning] = useState(false)
   const [showScannedOverlay, setShowScannedOverlay] = useState(false)
-  const [scannedOrders, setScannedOrders] = useState<Order[]>([])
+  const [scannedItems, setScannedItems] = useState<ScannedItem[]>([])
   
   // Processing state
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
@@ -60,6 +69,14 @@ export default function ScanPage() {
   const isMountedRef = useRef(true)
   const scannedQRsRef = useRef<Set<string>>(new Set())
   const lastScanTimeRef = useRef(0)
+
+  // Helper to check if item is a real order
+  const isOrder = (item: ScannedItem): item is Order => {
+    return 'id' in item && !('isPending' in item)
+  }
+
+  // Get only completed orders (not pending)
+  const scannedOrders = scannedItems.filter(isOrder)
 
   // Wake lock
   const enableWakeLock = useCallback(async () => {
@@ -158,15 +175,27 @@ export default function ScanPage() {
     
     // Flash overlay briefly
     setShowScannedOverlay(true)
-    setTimeout(() => setShowScannedOverlay(false), 120)
+    setTimeout(() => setShowScannedOverlay(false), 200)
+    
+    // IMMEDIATELY add pending placeholder to list (instant visual feedback)
+    const pendingItem: PendingOrder = { qrCode, isPending: true }
+    setScannedItems(prev => [...prev, pendingItem])
     
     // Fetch order in background - doesn't block next scan
     bartenderApi.scanQR(qrCode)
       .then(order => {
-        setScannedOrders(prev => [...prev, order])
+        // Replace pending placeholder with real order
+        setScannedItems(prev => 
+          prev.map(item => 
+            'isPending' in item && item.qrCode === qrCode ? order : item
+          )
+        )
       })
       .catch(error => {
-        // Remove from set if failed (allow retry)
+        // Remove pending item and allow retry
+        setScannedItems(prev => 
+          prev.filter(item => !('isPending' in item && item.qrCode === qrCode))
+        )
         scannedQRsRef.current.delete(qrCode)
         
         const errorMsg = error.response?.data?.detail || 'Invalid QR code'
@@ -213,7 +242,7 @@ export default function ScanPage() {
       await bartenderApi.markGiven(order.id)
       
       // Remove from list
-      setScannedOrders(prev => prev.filter(o => o.id !== order.id))
+      setScannedItems(prev => prev.filter(item => !isOrder(item) || item.id !== order.id))
       scannedQRsRef.current.delete(order.qr_code || '')
       
       // Success haptic
@@ -252,7 +281,7 @@ export default function ScanPage() {
       
       // Remove completed orders
       const completedIds = new Set(cardOrders.map(o => o.id))
-      setScannedOrders(prev => prev.filter(o => !completedIds.has(o.id)))
+      setScannedItems(prev => prev.filter(item => !isOrder(item) || !completedIds.has(item.id)))
       cardOrders.forEach(o => scannedQRsRef.current.delete(o.qr_code || ''))
       
       // Success feedback
@@ -276,13 +305,13 @@ export default function ScanPage() {
 
   // Remove order from queue
   const handleRemoveOrder = (order: Order) => {
-    setScannedOrders(prev => prev.filter(o => o.id !== order.id))
+    setScannedItems(prev => prev.filter(item => !isOrder(item) || item.id !== order.id))
     scannedQRsRef.current.delete(order.qr_code || '')
   }
 
   // Start new session (clear all)
   const handleNewSession = () => {
-    setScannedOrders([])
+    setScannedItems([])
     scannedQRsRef.current.clear()
     setMode('scanning')
     setTimeout(() => {
@@ -331,17 +360,18 @@ export default function ScanPage() {
     }
   }, [mode, isScanning, startScanner])
 
-  // Calculate totals
+  // Calculate totals (only from real orders)
   const totalAmount = scannedOrders.reduce((sum, o) => sum + parseFloat(String(o.total_amount)), 0)
   const cardOrders = scannedOrders.filter(o => o.payment_method !== 'cash' || o.status !== 'pending_payment')
   const cashOrders = scannedOrders.filter(o => o.payment_method === 'cash' && o.status === 'pending_payment')
+  const pendingCount = scannedItems.filter(item => 'isPending' in item).length
 
   // ============================================
   // PROCESSING MODE UI
   // ============================================
   if (mode === 'processing') {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-[100dvh] bg-background">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-background border-b border-border/40">
           <div className="flex items-center justify-between px-4 py-3">
@@ -502,13 +532,13 @@ export default function ScanPage() {
   // SCANNING MODE UI
   // ============================================
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
-      {/* Scanner */}
-      <div className="relative flex-shrink-0 aspect-square max-h-[50vh] bg-black">
+    <div className="flex flex-col h-[100dvh] h-[calc(100vh-4rem)]">
+      {/* Scanner - fixed height for iOS compatibility */}
+      <div className="relative flex-shrink-0 w-full" style={{ height: 'min(50dvh, 50vh, 400px)' }}>
         <div
           id="qr-scanner-page"
           ref={scannerRef}
-          className="w-full h-full"
+          className="w-full h-full bg-black"
         />
         
         {/* Loading overlay */}
@@ -521,7 +551,7 @@ export default function ScanPage() {
           </div>
         )}
 
-        {/* Scanned overlay */}
+        {/* Scanned overlay - longer duration for visibility */}
         {showScannedOverlay && (
           <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/90 z-10">
             <div className="text-center text-white">
@@ -548,9 +578,16 @@ export default function ScanPage() {
       <div className="flex-shrink-0 bg-card border-y border-border/40 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl font-bold">{scannedOrders.length}</span>
+            <span className="text-2xl font-bold">{scannedItems.length}</span>
             <div className="text-sm">
-              <p className="font-medium">orders scanned</p>
+              <p className="font-medium">
+                orders scanned
+                {pendingCount > 0 && (
+                  <span className="text-muted-foreground ml-1">
+                    ({pendingCount} loading)
+                  </span>
+                )}
+              </p>
               {scannedOrders.length > 0 && (
                 <p className="text-muted-foreground">${totalAmount.toFixed(2)} total</p>
               )}
@@ -565,25 +602,44 @@ export default function ScanPage() {
       </div>
 
       {/* Scanned orders list */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-        {scannedOrders.length === 0 ? (
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0">
+        {scannedItems.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p className="text-sm">Point camera at customer QR codes</p>
             <p className="text-xs mt-1">Orders will appear here</p>
           </div>
         ) : (
-          scannedOrders.map((order) => {
-            const isCash = order.payment_method === 'cash'
+          scannedItems.map((item, index) => {
+            // Pending placeholder (loading)
+            if ('isPending' in item) {
+              return (
+                <div
+                  key={`pending-${item.qrCode}`}
+                  className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border border-dashed border-border/60 animate-pulse"
+                >
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground">Loading order...</p>
+                    <p className="text-xs text-muted-foreground/60 font-mono">
+                      {item.qrCode.slice(0, 8)}...
+                    </p>
+                  </div>
+                </div>
+              )
+            }
+            
+            // Real order
+            const isCash = item.payment_method === 'cash'
             
             return (
               <div
-                key={order.id}
+                key={item.id}
                 className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="font-mono text-xs text-muted-foreground">
-                      #{order.id.slice(0, 6)}
+                      #{item.id.slice(0, 6)}
                     </span>
                     {isCash ? (
                       <Banknote className="h-3 w-3 text-amber-500" />
@@ -592,11 +648,11 @@ export default function ScanPage() {
                     )}
                   </div>
                   <p className="text-sm truncate">
-                    {order.items?.map(i => `${i.quantity}× ${i.drink_name}`).join(', ')}
+                    {item.items?.map(i => `${i.quantity}× ${i.drink_name}`).join(', ')}
                   </p>
                 </div>
                 <p className="font-bold tabular-nums">
-                  ${parseFloat(String(order.total_amount)).toFixed(2)}
+                  ${parseFloat(String(item.total_amount)).toFixed(2)}
                 </p>
               </div>
             )
