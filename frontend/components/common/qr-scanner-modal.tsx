@@ -133,7 +133,7 @@ export function QRScannerModal({
       await html5QrCode.start(
         { facingMode: 'environment' }, // Use back camera
         {
-          fps: 10,
+          fps: 30, // High FPS for faster scanning
           qrbox: function(viewfinderWidth, viewfinderHeight) {
             // Use percentage-based qrbox for better cross-platform compatibility
             const minEdgePercentage = 0.7 // 70% of the smaller edge
@@ -180,6 +180,9 @@ export function QRScannerModal({
   const handleQRCodeScanned = async (qrCode: string) => {
     if (isProcessing) return
 
+    // Instant haptic feedback for perceived speed
+    navigator.vibrate?.(50)
+    
     setIsProcessing(true)
     
     try {

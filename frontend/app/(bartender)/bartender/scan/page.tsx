@@ -81,7 +81,7 @@ export default function ScanPage() {
       await html5QrCode.start(
         { facingMode: 'environment' },
         {
-          fps: 10,
+          fps: 30, // High FPS for faster scanning
           qrbox: function(viewfinderWidth: number, viewfinderHeight: number) {
             const minEdgePercentage = 0.7
             const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight)
@@ -120,6 +120,9 @@ export default function ScanPage() {
   const handleQRCodeScanned = async (qrCode: string) => {
     if (isProcessing || scannedOrder) return
 
+    // Instant haptic feedback for perceived speed
+    navigator.vibrate?.(50)
+    
     setIsProcessing(true)
     
     try {

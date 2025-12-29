@@ -113,14 +113,15 @@ export default function OrderSuccessPage() {
         <p className="text-white/40 text-sm mb-6">{order.club_name}</p>
       )}
 
-      {/* QR Code */}
+      {/* QR Code - Optimized for fast scanning */}
       {order?.qr_code ? (
-        <div className="bg-white rounded-2xl p-5 mb-6">
+        <div className="bg-white rounded-2xl p-4 mb-6">
           <QRCodeSVG
             value={order.qr_code}
-            size={180}
-            level="M"
-            includeMargin={false}
+            size={260}
+            level="L"
+            includeMargin={true}
+            marginSize={4}
             fgColor="#000000"
             bgColor="#ffffff"
           />

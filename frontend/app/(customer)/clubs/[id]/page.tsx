@@ -543,16 +543,17 @@ export default function ClubDrinksPage() {
       {/* Order Success Modal (for cash payments) */}
       <Dialog open={!!createdOrder && createdOrder.payment_method === PaymentMethod.CASH} onOpenChange={(open) => !open && setCreatedOrder(null)}>
         <DialogContent className="max-w-xs bg-[#0a0a0a] border-white/[0.08] p-0 gap-0 overflow-hidden">
-          {/* QR Code */}
+          {/* QR Code - Optimized for fast scanning */}
           {createdOrder?.qr_code && (
             <>
-              <div className="p-6">
-                <div className="bg-white rounded-2xl p-4 flex items-center justify-center">
+              <div className="p-5">
+                <div className="bg-white rounded-2xl p-3 flex items-center justify-center">
                   <QRCodeSVG
                     value={createdOrder.qr_code}
-                    size={160}
-                    level="M"
-                    includeMargin={false}
+                    size={200}
+                    level="L"
+                    includeMargin={true}
+                    marginSize={4}
                     fgColor="#000000"
                     bgColor="#ffffff"
                   />
