@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from app.core.config import settings
 from app.api.v1.router import api_router
 from app.db.base import Base, engine
@@ -9,6 +11,10 @@ from app.models import User, Club, Drink, DrinkList, Order, OrderItem, Bartender
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Ensure uploads directory exists
+UPLOADS_DIR = Path("uploads/images")
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(
     title="La Previa API",
@@ -48,4 +54,7 @@ def health_check():
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+# Serve uploaded files
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 

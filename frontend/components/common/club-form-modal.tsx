@@ -21,6 +21,7 @@ import { ImageCropper } from './image-cropper'
 import { LogoPositioner } from './logo-positioner'
 import { ClubLogo } from './club-logo'
 import { AddressAutocomplete } from './address-autocomplete'
+import { apiClient } from '@/lib/api/client'
 
 interface ClubFormData {
   name: string
@@ -31,7 +32,7 @@ interface ClubFormData {
   latitude: number | null
   longitude: number | null
   place_id: string | null
-  logo_base64: string | null
+  logo_url: string | null
 }
 
 interface ClubFormModalProps {
@@ -62,7 +63,7 @@ export function ClubFormModal({
     latitude: null,
     longitude: null,
     place_id: null,
-    logo_base64: null,
+    logo_url: null,
   })
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [logoSettings, setLogoSettings] = useState<LogoSettings | null>(null)
@@ -104,7 +105,7 @@ export function ClubFormModal({
           latitude: club.latitude || null,
           longitude: club.longitude || null,
           place_id: club.place_id || null,
-          logo_base64: null,
+          logo_url: club.logo_url || null,
         })
         if (club.logo_url) {
           setLogoPreview(club.logo_url)
@@ -123,7 +124,7 @@ export function ClubFormModal({
           latitude: null,
           longitude: null,
           place_id: null,
-          logo_base64: null,
+          logo_url: null,
         })
         setLogoPreview(null)
         setLogoSettings(null)
@@ -171,38 +172,35 @@ export function ClubFormModal({
     setIsUploadingLogo(true)
     
     try {
-      // Convert cropped file to base64
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const base64String = reader.result as string
-        setFormData(prev => ({ ...prev, logo_base64: base64String }))
-        setLogoPreview(base64String)
-        setIsCropperOpen(false)
-        setSelectedImageFile(null)
-        setIsUploadingLogo(false)
-        
-        // After cropping, offer to position logo
-        toast({
-          title: 'Logo cropped!',
-          description: 'You can now position your logo if needed.',
-        })
-      }
-      reader.onerror = () => {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: 'Failed to process cropped image',
-        })
-        setIsUploadingLogo(false)
-      }
-      reader.readAsDataURL(croppedFile)
-    } catch (error) {
-      console.error('Error processing cropped image:', error)
+      // Upload to server instead of storing base64
+      const uploadFormData = new FormData()
+      uploadFormData.append('file', croppedFile)
+      
+      // Use existing club id or 'new' for new clubs
+      const clubIdParam = club?.id || 'new'
+      
+      const response = await apiClient.post(`/uploads/image?club_id=${clubIdParam}`, uploadFormData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      
+      const imageUrl = response.data.url
+      setFormData(prev => ({ ...prev, logo_url: imageUrl }))
+      setLogoPreview(imageUrl)
+      setIsCropperOpen(false)
+      setSelectedImageFile(null)
+      
+      toast({
+        title: 'Logo uploaded!',
+        description: 'You can now position your logo if needed.',
+      })
+    } catch (error: any) {
+      console.error('Error uploading logo:', error)
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to process cropped image',
+        title: 'Upload failed',
+        description: error.response?.data?.detail || 'Failed to upload logo',
       })
+    } finally {
       setIsUploadingLogo(false)
     }
   }
@@ -251,7 +249,7 @@ export function ClubFormModal({
   }
 
   const removeLogo = () => {
-    setFormData(prev => ({ ...prev, logo_base64: null }))
+    setFormData(prev => ({ ...prev, logo_url: null }))
     setLogoPreview(null)
     setLogoSettings(null)
   }
@@ -286,7 +284,7 @@ export function ClubFormModal({
           latitude: formData.latitude || undefined,
           longitude: formData.longitude || undefined,
           place_id: formData.place_id || undefined,
-          logo_url: formData.logo_base64 || undefined,
+          logo_url: formData.logo_url || undefined,
           logo_settings: logoSettings || undefined,
         })
         
@@ -305,7 +303,7 @@ export function ClubFormModal({
           latitude: formData.latitude || undefined,
           longitude: formData.longitude || undefined,
           place_id: formData.place_id || undefined,
-          logo_url: formData.logo_base64 || undefined,
+          logo_url: formData.logo_url || undefined,
           logo_settings: logoSettings || undefined,
         })
         

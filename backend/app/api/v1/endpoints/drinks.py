@@ -4,12 +4,14 @@ Drink parsing and batch creation endpoints.
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from app.db.base import get_db
 from app.models.user import User
 from app.models.club import Club
-from app.models.drink import Drink
+from app.models.drink import Drink, DrinkType
+from app.models.liquor import Liquor, LiquorType
+from app.models.soda import Soda
 from app.schemas.drink import DrinkCreate, DrinkResponse
 from app.core.dependencies import get_current_club_owner
 from app.core.llm_service import llm_service
@@ -59,6 +61,47 @@ class BatchDrinkCreate(BaseModel):
 class BatchCreateRequest(BaseModel):
     """Request for batch drink creation."""
     drinks: List[BatchDrinkCreate]
+
+
+# ============== Ingredient Parsing (Liquors & Sodas) ==============
+
+class LiquorPreview(BaseModel):
+    """Preview data for a liquor before saving."""
+    name: str
+    price: float
+    liquor_type: str
+    brand_name: Optional[str] = None
+    image_url: Optional[str] = None
+
+
+class SodaPreview(BaseModel):
+    """Preview data for a soda before saving."""
+    name: str
+    price: float
+    price_addon: float = 0
+    brand_name: Optional[str] = None
+    image_url: Optional[str] = None
+
+
+class ParseIngredientsResponse(BaseModel):
+    """Response with parsed liquors and sodas."""
+    liquors: List[LiquorPreview]
+    sodas: List[SodaPreview]
+
+
+class BatchIngredientsCreate(BaseModel):
+    """Request for batch creating liquors and sodas."""
+    liquors: List[LiquorPreview]
+    sodas: List[SodaPreview]
+
+
+class BatchIngredientsResponse(BaseModel):
+    """Response after batch creating ingredients."""
+    liquors_created: int
+    sodas_created: int
+    shots_created: int
+    liquor_ids: List[str]
+    soda_ids: List[str]
 
 
 def _get_brand_logo(brand_name: str) -> str | None:
@@ -418,4 +461,194 @@ async def batch_create_drinks(
         }) 
         for drink in created_drinks
     ]
+
+
+# ============== Ingredient Parsing Endpoints ==============
+
+@router.post("/parse-ingredients", response_model=ParseIngredientsResponse)
+async def parse_ingredients(
+    request: ParsePreviewRequest,
+    club_id: str = Query(None),
+    current_user: User = Depends(get_current_club_owner),
+    db: Session = Depends(get_db)
+):
+    """
+    Parse natural language input and separate into liquors and sodas.
+    
+    Example input: "Absolut $8, Jack Daniels $10, Beefeater $9, Coca-Cola $3, Red Bull $4"
+    Returns separate lists of liquors (spirits) and sodas (mixers) with images.
+    """
+    if not request.text or len(request.text.strip()) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Input text must be at least 3 characters"
+        )
+    
+    # Parse using LLM
+    try:
+        parsed = await llm_service.parse_ingredients(request.text)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLM parsing service not available"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error parsing ingredients: {str(e)}"
+        )
+    
+    # Build previews with images
+    liquor_previews = []
+    for liq in parsed.get("liquors", []):
+        image_url = image_resolver.resolve_drink_image(
+            drink_name=liq["name"],
+            category="liquors",
+            brand_name=liq["name"]
+        )
+        if not image_url:
+            image_url = _get_brand_logo(liq["name"])
+        
+        liquor_previews.append(LiquorPreview(
+            name=liq["name"],
+            price=liq["price"],
+            liquor_type=liq.get("liquor_type", "other"),
+            brand_name=liq["name"],
+            image_url=image_url
+        ))
+    
+    soda_previews = []
+    for soda in parsed.get("sodas", []):
+        image_url = image_resolver.resolve_drink_image(
+            drink_name=soda["name"],
+            category="sodas",
+            brand_name=soda["name"]
+        )
+        if not image_url:
+            image_url = _get_brand_logo(soda["name"])
+        
+        soda_previews.append(SodaPreview(
+            name=soda["name"],
+            price=soda.get("price", 0),
+            price_addon=soda.get("price_addon", 0),
+            brand_name=soda["name"],
+            image_url=image_url
+        ))
+    
+    return ParseIngredientsResponse(
+        liquors=liquor_previews,
+        sodas=soda_previews
+    )
+
+
+@router.post("/batch-ingredients", response_model=BatchIngredientsResponse, status_code=status.HTTP_201_CREATED)
+async def batch_create_ingredients(
+    club_id: str = Query(..., description="Club ID"),
+    request: BatchIngredientsCreate = ...,
+    current_user: User = Depends(get_current_club_owner),
+    db: Session = Depends(get_db)
+):
+    """
+    Batch create liquors and sodas from parsed preview.
+    Automatically creates shot drinks for each liquor.
+    """
+    try:
+        club_uuid = UUID(club_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid club ID format")
+    
+    # Verify club ownership
+    club = db.query(Club).filter(Club.id == club_uuid, Club.owner_id == current_user.id).first()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club not found or access denied")
+    
+    # Get existing to avoid duplicates
+    existing_liquor_names = {l.name.lower() for l in db.query(Liquor).filter(Liquor.club_id == club_uuid).all()}
+    existing_soda_names = {s.name.lower() for s in db.query(Soda).filter(Soda.club_id == club_uuid).all()}
+    
+    # Get shots category
+    category_service = CategoryService()
+    category_service.ensure_system_categories_exist(db)
+    system_categories = category_service.get_system_categories(db)
+    shots_category = next((c for c in system_categories if c.name == "Shots"), None)
+    
+    # Create liquors and shots
+    created_liquor_ids = []
+    shots_created = 0
+    
+    for liq_data in request.liquors:
+        if liq_data.name.lower() in existing_liquor_names:
+            continue
+        
+        # Map liquor_type string to enum
+        try:
+            liquor_type_enum = LiquorType(liq_data.liquor_type.lower())
+        except (ValueError, AttributeError):
+            liquor_type_enum = LiquorType.OTHER
+        
+        liquor = Liquor(
+            club_id=club_uuid,
+            name=liq_data.name,
+            brand_name=liq_data.brand_name or liq_data.name,
+            liquor_type=liquor_type_enum,
+            shot_price=liq_data.price,
+            image_url=liq_data.image_url,
+            is_available=True
+        )
+        db.add(liquor)
+        db.flush()
+        
+        # Auto-create shot drink
+        shot_drink = Drink(
+            club_id=club_uuid,
+            name=f"Shot of {liquor.name}",
+            description=f"Pure {liquor.name} shot",
+            price=liquor.shot_price,
+            drink_type=DrinkType.SHOT,
+            liquor_id=liquor.id,
+            category="Shots",
+            category_id=shots_category.id if shots_category else None,
+            image_url=liquor.image_url,
+            brand_name=liquor.brand_name,
+            is_available=True
+        )
+        db.add(shot_drink)
+        
+        created_liquor_ids.append(str(liquor.id))
+        existing_liquor_names.add(liq_data.name.lower())
+        shots_created += 1
+    
+    # Create sodas
+    created_soda_ids = []
+    
+    for soda_data in request.sodas:
+        if soda_data.name.lower() in existing_soda_names:
+            continue
+        
+        soda = Soda(
+            club_id=club_uuid,
+            name=soda_data.name,
+            brand_name=soda_data.brand_name or soda_data.name,
+            price=soda_data.price,
+            price_addon=soda_data.price_addon,
+            image_url=soda_data.image_url,
+            is_available=True
+        )
+        db.add(soda)
+        db.flush()
+        
+        created_soda_ids.append(str(soda.id))
+        existing_soda_names.add(soda_data.name.lower())
+    
+    db.commit()
+    
+    logger.info(f"Created {len(created_liquor_ids)} liquors, {len(created_soda_ids)} sodas, {shots_created} shots for club {club_id}")
+    
+    return BatchIngredientsResponse(
+        liquors_created=len(created_liquor_ids),
+        sodas_created=len(created_soda_ids),
+        shots_created=shots_created,
+        liquor_ids=created_liquor_ids,
+        soda_ids=created_soda_ids
+    )
 

@@ -3,6 +3,38 @@
  * Migrates old paths to new folder structure.
  */
 
+// Backend URL for uploaded images
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+
+/**
+ * Resolves image URLs to their full path.
+ * - Backend uploads (/uploads/...) -> prepends backend URL
+ * - Local assets (/assets/...) -> returns as-is
+ * - External URLs (http/https) -> returns as-is
+ * - Base64 data URLs -> returns as-is
+ */
+export function resolveImageUrl(imageUrl: string | null | undefined): string | null {
+  if (!imageUrl) return null
+  
+  // Base64 data URLs - return as-is
+  if (imageUrl.startsWith('data:')) {
+    return imageUrl
+  }
+  
+  // External URLs - return as-is
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl
+  }
+  
+  // Backend uploads - prepend backend URL
+  if (imageUrl.startsWith('/uploads/')) {
+    return `${BACKEND_URL}${imageUrl}`
+  }
+  
+  // Local assets or other relative paths - return as-is (Next.js will handle)
+  return imageUrl
+}
+
 /**
  * Maps old logo filenames to their new category folders
  */

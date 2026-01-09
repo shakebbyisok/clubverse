@@ -7,7 +7,7 @@ import { X, MapPin, Navigation, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { useMemo } from 'react'
-import Image from 'next/image'
+import { resolveImageUrl } from '@/lib/utils/image-path'
 
 interface ClubBottomSheetProps {
   club: Club | null
@@ -114,12 +114,10 @@ export function ClubBottomSheet({
         {/* Cover image */}
         {club.cover_image_url && (
           <div className="rounded-lg overflow-hidden aspect-video bg-muted relative">
-            <Image
-              src={club.cover_image_url}
+            <img
+              src={resolveImageUrl(club.cover_image_url) || ''}
               alt={club.name}
-              fill
-              className="object-cover"
-              unoptimized
+              className="absolute inset-0 w-full h-full object-cover"
             />
           </div>
         )}

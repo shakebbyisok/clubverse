@@ -3,6 +3,7 @@
 import { Building2 } from 'lucide-react'
 import { LogoSettings } from '@/types'
 import { cn } from '@/lib/utils'
+import { resolveImageUrl } from '@/lib/utils/image-path'
 
 interface ClubLogoProps {
   logoUrl?: string | null
@@ -21,7 +22,10 @@ export function ClubLogo({
   size = 64,
   containerClassName,
 }: ClubLogoProps) {
-  if (!logoUrl) {
+  // Resolve URL to handle backend uploads, local assets, and base64
+  const resolvedUrl = resolveImageUrl(logoUrl)
+  
+  if (!resolvedUrl) {
     return (
       <div
         className={cn(
@@ -58,7 +62,7 @@ export function ClubLogo({
         style={{ width: size, height: size }}
       >
         <img
-          src={logoUrl}
+          src={resolvedUrl}
           alt={alt}
           className={cn('absolute object-contain', className)}
           style={{
@@ -75,7 +79,7 @@ export function ClubLogo({
   // Default: simple rounded image that fills the container
   return (
     <img
-      src={logoUrl}
+      src={resolvedUrl}
       alt={alt}
       className={cn(
         'rounded-lg object-cover flex-shrink-0',

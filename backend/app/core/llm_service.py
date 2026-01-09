@@ -128,45 +128,52 @@ class LLMService:
         if not text or len(text.strip()) < 3:
             return []
         
-        prompt = f"""Parse drinks into structured JSON. Classify each drink based on context and type.
+        prompt = f"""Parse drinks/ingredients into structured JSON. Classify PRECISELY based on what the item IS:
 
-AVAILABLE CATEGORIES:
-- "liquors": Pure liquors/shots (e.g., Jack Daniels, Beefeater, Cacique, Ballantines)
-- "drinks_liquor_soda": Mixed drinks with liquor + soda (e.g., Gin Tonic, Rum & Coke)
-- "beers": Beers and ciders (e.g., Heineken, Corona)
-- "sodas": Non-alcoholic drinks (e.g., Coke, Sprite, Water)
-- "wines": Wines and champagne
+PRIMARY CATEGORIES (mutually exclusive):
+- "liquor": Pure spirits/liquors that are BASE INGREDIENTS for shots and cocktails
+  Examples: Absolut, Jack Daniel's, Beefeater, Cacique, Ballantine's, Havana Club, Smirnoff
+  These are the ALCOHOL base - vodka, gin, rum, whisky, tequila, brandy brands
+  
+- "soda": Mixers and non-alcoholic drinks used to make cocktails
+  Examples: Coca-Cola, Sprite, Tonic Water, Red Bull, Fanta, 7Up, Orange Juice, Cranberry
+  These are what you MIX with liquor
+  
+- "beer": Beers and ciders (standalone drinks)
+  Examples: Heineken, Corona, Estrella Galicia, Mahou, San Miguel, Amstel
+  
+- "wine": Wines and champagne (standalone drinks)
+  Examples: Rioja, Ribera, Cava, Moet, Veuve Clicquot
 
-SUBCATEGORIES FOR LIQUORS:
-- "shots": Pure liquor shots (default for liquors)
-- "gin": Gin brands (Beefeater, Seagram's, Puerto Indias, Bombay Sapphire, Hendrick's)
-- "rum": Rum brands (Cacique, Brugal, Barcelo, Havana Club)
-- "whisky": Whisky brands (Ballantines, Red Label, Jack Daniels, Black Label)
+LIQUOR TYPES (for liquor category only):
+- "vodka": Absolut, Smirnoff, Grey Goose, Belvedere, Eristoff
+- "gin": Beefeater, Bombay Sapphire, Hendrick's, Tanqueray, Puerto Indias, Seagram's
+- "rum": Bacardi, Havana Club, Cacique, Brugal, Barcelo, Malibu, Captain Morgan
+- "whisky": Jack Daniel's, Johnnie Walker, Ballantine's, Jameson, Jim Beam, Chivas
+- "tequila": Jose Cuervo, Patron, Don Julio, Olmeca
+- "brandy": Fundador, Veterano, Torres, Lepanto
+- "liqueur": Jagermeister, Baileys, Licor 43, Cointreau, Kahlua, Amaretto
 
 Input: "{text}"
 
 RULES:
-1. USE section headers (Gin, Ron, Whisky, etc.) to determine subcategory
-2. Extract specific brands/drinks with prices
-3. Classify correctly:
-   - Pure liquors under "Gin", "Ron", "Whisky" headers → category: "liquors", subcategory: "gin"/"rum"/"whisky"
-   - Mixed drinks (liquor + soda) → category: "drinks_liquor_soda"
-   - Beers → category: "beers"
-   - Sodas → category: "sodas"
-   - Wines → category: "wines"
-4. If under "Gin" section → subcategory: "gin"
-5. If under "Ron" section → subcategory: "rum"
-6. If under "Whisky" section → subcategory: "whisky"
-7. Preserve variant names (e.g., "Jack Daniel's Manzana", "Havanna7")
-8. Normalize brand names (e.g., "Jack Daniels" → "Jack Daniel's", "Havanna" → "Havana Club")
-9. SKIP plain headers like "Gin:", "Ron:", "Whisky:" without prices
+1. CRITICAL: Classify based on WHAT THE ITEM IS, not how it's listed
+2. Spirits/alcohol brands → ALWAYS "liquor" (even if under "Shots" header)
+3. Soft drinks/mixers → ALWAYS "soda" (Coca-Cola is soda, not liquor!)
+4. Section headers help identify liquor_type, NOT the category
+5. Under "Gin" section: Beefeater → category: "liquor", liquor_type: "gin"
+6. Under "Ron/Rum" section: Havana Club → category: "liquor", liquor_type: "rum"
+7. Normalize brand names (e.g., "Jack Daniels" → "Jack Daniel's")
+8. SKIP plain headers without prices
 
 Return JSON:
 {{
   "drinks": [
-    {{"name": "Beefeater", "price": 8.00, "category": "liquors", "subcategory": "gin"}},
-    {{"name": "Cacique", "price": 8.00, "category": "liquors", "subcategory": "rum"}},
-    {{"name": "Ballantines", "price": 8.00, "category": "liquors", "subcategory": "whisky"}}
+    {{"name": "Beefeater", "price": 8.00, "category": "liquor", "liquor_type": "gin"}},
+    {{"name": "Jack Daniel's", "price": 10.00, "category": "liquor", "liquor_type": "whisky"}},
+    {{"name": "Coca-Cola", "price": 3.00, "category": "soda"}},
+    {{"name": "Red Bull", "price": 4.00, "category": "soda"}},
+    {{"name": "Heineken", "price": 5.00, "category": "beer"}}
   ]
 }}
 
@@ -246,6 +253,7 @@ Return ONLY valid JSON."""
                                 "name": brand_name,
                                 "price": float(price),
                                 "category": drink.get("category") if drink.get("category") else None,
+                                "liquor_type": drink.get("liquor_type") if drink.get("liquor_type") else None,
                                 "subcategory": drink.get("subcategory") if drink.get("subcategory") else None
                             })
                         except (ValueError, TypeError) as e:
@@ -440,6 +448,379 @@ Return ONLY valid JSON."""
         except Exception as e:
             logger.error(f"Error parsing drinks with categories: {str(e)}")
             return {"drinks": [], "suggested_categories": []}
+
+    async def parse_ingredients(self, text: str) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Parse natural language text and separate into liquors and sodas.
+        
+        Args:
+            text: Natural language input with liquors and/or sodas
+            
+        Returns:
+            Dictionary with "liquors" and "sodas" lists
+        """
+        if not self.client:
+            raise ValueError("LLM service not configured (OPENROUTER_KEY missing)")
+
+        if not text or len(text.strip()) < 3:
+            return {"liquors": [], "sodas": []}
+
+        prompt = f"""Parse ingredients for a bar into structured JSON. Separate LIQUORS from SODAS/MIXERS.
+
+LIQUORS (spirits/alcohol - base for shots and cocktails):
+These are alcohol brands: vodka, gin, rum, whisky, tequila, brandy, liqueur
+Examples: Absolut, Jack Daniel's, Beefeater, Bacardi, Havana Club, Johnnie Walker
+
+SODAS/MIXERS (non-alcoholic drinks used to make cocktails):
+These are soft drinks and mixers
+Examples: Coca-Cola, Sprite, Tonic Water, Red Bull, Fanta, Orange Juice
+
+LIQUOR TYPES:
+- vodka: Absolut, Smirnoff, Grey Goose, Belvedere, Eristoff, Stolichnaya
+- gin: Beefeater, Bombay Sapphire, Hendrick's, Tanqueray, Puerto Indias, Seagram's
+- rum: Bacardi, Havana Club, Cacique, Brugal, Barcelo, Malibu, Captain Morgan
+- whisky: Jack Daniel's, Johnnie Walker (Red/Black Label), Ballantine's, Jameson, Jim Beam
+- tequila: Jose Cuervo, Patron, Don Julio, Olmeca, Sierra
+- brandy: Fundador, Veterano, Torres, Lepanto, Cardenal Mendoza
+- liqueur: Jagermeister, Baileys, Licor 43, Cointreau, Kahlua, Amaretto, Fireball
+
+Input: "{text}"
+
+RULES:
+1. Classify STRICTLY by what the item IS
+2. All alcohol brands → liquors
+3. All soft drinks/mixers → sodas
+4. Extract price for each item
+5. For liquors, identify the liquor_type
+6. Normalize brand names
+7. Skip headers without prices
+
+Return JSON:
+{{
+  "liquors": [
+    {{"name": "Absolut", "price": 8.00, "liquor_type": "vodka"}},
+    {{"name": "Beefeater", "price": 8.00, "liquor_type": "gin"}},
+    {{"name": "Jack Daniel's", "price": 10.00, "liquor_type": "whisky"}}
+  ],
+  "sodas": [
+    {{"name": "Coca-Cola", "price": 3.00, "price_addon": 0}},
+    {{"name": "Red Bull", "price": 4.00, "price_addon": 2.00}}
+  ]
+}}
+
+Notes on sodas:
+- price: standalone price (if sold alone)
+- price_addon: extra cost when mixed in cocktail (Red Bull typically +2€)
+
+Return ONLY valid JSON."""
+
+        try:
+            response = await self.client.chat.completions.create(
+                model="openai/gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a JSON parser for bar inventory. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=4000,
+                response_format={"type": "json_object"}
+            )
+
+            content = response.choices[0].message.content
+            if not content:
+                logger.error("Empty response from LLM")
+                return {"liquors": [], "sodas": []}
+
+            try:
+                data = json.loads(content)
+                liquors_raw = data.get("liquors", [])
+                sodas_raw = data.get("sodas", [])
+
+                # Process liquors
+                liquors = []
+                for item in liquors_raw:
+                    if isinstance(item, dict) and "name" in item and item.get("price") is not None:
+                        liquors.append({
+                            "name": self._normalize_brand_name(str(item["name"]).strip()),
+                            "price": float(item["price"]),
+                            "liquor_type": item.get("liquor_type", "other")
+                        })
+
+                # Process sodas
+                sodas = []
+                for item in sodas_raw:
+                    if isinstance(item, dict) and "name" in item:
+                        sodas.append({
+                            "name": self._normalize_brand_name(str(item["name"]).strip()),
+                            "price": float(item.get("price", 0)),
+                            "price_addon": float(item.get("price_addon", 0))
+                        })
+
+                logger.info(f"Parsed {len(liquors)} liquors and {len(sodas)} sodas from text")
+                return {"liquors": liquors, "sodas": sodas}
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse ingredients JSON: {e}")
+                return {"liquors": [], "sodas": []}
+
+        except Exception as e:
+            logger.error(f"Error parsing ingredients: {str(e)}")
+            return {"liquors": [], "sodas": []}
+
+    async def smart_parse(
+        self,
+        text: str,
+        existing_liquors: Optional[List[Dict[str, Any]]] = None,
+        existing_sodas: Optional[List[Dict[str, Any]]] = None,
+        existing_categories: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Smart parsing that understands context and auto-creates missing ingredients.
+        
+        Handles:
+        - Pure liquors → Creates liquor + auto-shot
+        - Pure sodas → Creates soda
+        - Cocktails (Gin Tonic, Vodka Red Bull) → Creates missing liquor/soda + cocktail
+        - Explicit category creation ("under Premium Whisky", "create category X")
+        - Beers, wines → Regular drinks
+        
+        Args:
+            text: Natural language input
+            existing_liquors: List of existing liquors [{id, name, liquor_type}]
+            existing_sodas: List of existing sodas [{id, name}]
+            existing_categories: List of existing categories [{id, name}]
+            
+        Returns:
+            {
+                "liquors": [...],      # Liquors to create
+                "sodas": [...],        # Sodas to create
+                "cocktails": [...],    # Cocktails to create with liquor/soda refs
+                "drinks": [...],       # Other drinks (beers, wines)
+                "category": {...},     # Category to create (if explicit)
+                "category_for_items": "...",  # Category name to assign
+            }
+        """
+        if not self.client:
+            raise ValueError("LLM service not configured (OPENROUTER_KEY missing)")
+
+        if not text or len(text.strip()) < 3:
+            return {"liquors": [], "sodas": [], "cocktails": [], "drinks": [], "category": None}
+
+        # Build context for existing inventory
+        liquors_context = ""
+        if existing_liquors:
+            liquors_list = [f"- {l['name']} ({l.get('liquor_type', 'other')})" for l in existing_liquors]
+            liquors_context = "EXISTING LIQUORS:\n" + "\n".join(liquors_list)
+        else:
+            liquors_context = "EXISTING LIQUORS: None"
+
+        sodas_context = ""
+        if existing_sodas:
+            sodas_list = [f"- {s['name']}" for s in existing_sodas]
+            sodas_context = "EXISTING SODAS:\n" + "\n".join(sodas_list)
+        else:
+            sodas_context = "EXISTING SODAS: None"
+
+        categories_context = ""
+        if existing_categories:
+            cat_list = [f"- {c['name']}" for c in existing_categories]
+            categories_context = "EXISTING CATEGORIES:\n" + "\n".join(cat_list)
+        else:
+            categories_context = "EXISTING CATEGORIES: Shots, Cocktails, Beers, Wines, Sodas, Spirits"
+
+        prompt = f"""Parse bar items from natural language. Be SMART about cocktails and categories.
+
+{liquors_context}
+
+{sodas_context}
+
+{categories_context}
+
+USER INPUT: "{text}"
+
+CLASSIFICATION RULES:
+
+1. PURE LIQUORS (spirits sold as shots):
+   - Brand names: Absolut, Jack Daniel's, Beefeater, Havana Club, etc.
+   - Generic: Vodka, Gin, Rum, Whisky, Tequila
+   → Output as "liquors"
+
+2. PURE SODAS (mixers):
+   - Coca-Cola, Sprite, Tonic Water, Red Bull, Fanta, Orange Juice
+   → Output as "sodas"
+
+3. COCKTAILS (liquor + soda combination):
+   Recognize patterns like:
+   - "Gin Tonic" → liquor: "Gin", soda: "Tonic"
+   - "Vodka Red Bull" → liquor: "Vodka", soda: "Red Bull"
+   - "Rum Cola" / "Cuba Libre" → liquor: "Rum", soda: "Cola"
+   - "Whisky Cola" / "Jack Cola" → liquor: "Whisky", soda: "Cola"
+   - "Vodka Orange" → liquor: "Vodka", soda: "Orange Juice"
+   
+   For each cocktail:
+   - Check if liquor exists in EXISTING LIQUORS → use existing name
+   - If not exists → create generic (e.g., "Gin" not "Beefeater")
+   - Check if soda exists in EXISTING SODAS → use existing name
+   - If not exists → create it
+   → Output as "cocktails" with liquor_name and soda_name
+
+4. OTHER DRINKS (beers, wines):
+   - Heineken, Corona, Estrella → category: "beer"
+   - Rioja, Cava, Moet → category: "wine"
+   → Output as "drinks"
+
+5. CATEGORY DETECTION:
+   Look for explicit category mentions:
+   - "under [Category Name]"
+   - "in [Category Name] category"
+   - "create category [Name]"
+   - "add to [Category Name]"
+   
+   If category mentioned but NOT in EXISTING CATEGORIES:
+   → Set "new_category" with the name
+   
+   Set "category_for_items" to assign all items to this category.
+
+LIQUOR TYPE MAPPING:
+- Vodka brands/generic → "vodka"
+- Gin brands/generic → "gin"  
+- Rum brands/generic → "rum"
+- Whisky/Whiskey/Bourbon → "whisky"
+- Tequila brands → "tequila"
+- Brandy/Cognac → "brandy"
+- Jagermeister, Baileys, Licor 43 → "liqueur"
+
+Return JSON:
+{{
+  "liquors": [
+    {{"name": "Absolut", "price": 8.00, "liquor_type": "vodka", "is_new": true}}
+  ],
+  "sodas": [
+    {{"name": "Tonic Water", "price": 2.00, "price_addon": 0, "is_new": true}}
+  ],
+  "cocktails": [
+    {{
+      "name": "Gin Tonic",
+      "price": 10.00,
+      "liquor_name": "Gin",
+      "liquor_exists": false,
+      "soda_name": "Tonic Water", 
+      "soda_exists": true
+    }}
+  ],
+  "drinks": [
+    {{"name": "Heineken", "price": 5.00, "category": "beer"}}
+  ],
+  "new_category": {{"name": "Premium Spirits", "reason": "explicitly requested"}},
+  "category_for_items": "Premium Spirits"
+}}
+
+IMPORTANT:
+- For cocktails, extract the BASE liquor type (Gin, Vodka, Rum) not brand
+- Match existing inventory by name (case-insensitive)
+- If "Gin Tonic" and no gin exists, create generic "Gin" liquor
+- Only set "new_category" if explicitly mentioned and doesn't exist
+- "is_new" = true if item needs to be created, false if exists
+
+Return ONLY valid JSON."""
+
+        try:
+            response = await self.client.chat.completions.create(
+                model="openai/gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a smart bar inventory parser. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=4000,
+                response_format={"type": "json_object"}
+            )
+
+            content = response.choices[0].message.content
+            if not content:
+                logger.error("Empty response from LLM smart_parse")
+                return {"liquors": [], "sodas": [], "cocktails": [], "drinks": [], "category": None}
+
+            try:
+                data = json.loads(content)
+                
+                # Process liquors
+                liquors = []
+                for item in data.get("liquors", []):
+                    if isinstance(item, dict) and "name" in item and item.get("price") is not None:
+                        liquors.append({
+                            "name": self._normalize_brand_name(str(item["name"]).strip()),
+                            "price": float(item["price"]),
+                            "liquor_type": item.get("liquor_type", "other"),
+                            "is_new": item.get("is_new", True)
+                        })
+
+                # Process sodas
+                sodas = []
+                for item in data.get("sodas", []):
+                    if isinstance(item, dict) and "name" in item:
+                        sodas.append({
+                            "name": str(item["name"]).strip(),
+                            "price": float(item.get("price", 0)),
+                            "price_addon": float(item.get("price_addon", 0)),
+                            "is_new": item.get("is_new", True)
+                        })
+
+                # Process cocktails
+                cocktails = []
+                for item in data.get("cocktails", []):
+                    if isinstance(item, dict) and "name" in item and item.get("price") is not None:
+                        cocktails.append({
+                            "name": str(item["name"]).strip(),
+                            "price": float(item["price"]),
+                            "liquor_name": str(item.get("liquor_name", "")).strip(),
+                            "liquor_exists": item.get("liquor_exists", False),
+                            "soda_name": str(item.get("soda_name", "")).strip(),
+                            "soda_exists": item.get("soda_exists", False)
+                        })
+
+                # Process other drinks
+                drinks = []
+                for item in data.get("drinks", []):
+                    if isinstance(item, dict) and "name" in item and item.get("price") is not None:
+                        drinks.append({
+                            "name": self._normalize_brand_name(str(item["name"]).strip()),
+                            "price": float(item["price"]),
+                            "category": item.get("category", "other")
+                        })
+
+                # Process category
+                new_category = None
+                if data.get("new_category") and isinstance(data["new_category"], dict):
+                    new_category = {
+                        "name": str(data["new_category"].get("name", "")).strip(),
+                        "reason": data["new_category"].get("reason", "")
+                    }
+
+                category_for_items = data.get("category_for_items")
+
+                logger.info(
+                    f"Smart parsed: {len(liquors)} liquors, {len(sodas)} sodas, "
+                    f"{len(cocktails)} cocktails, {len(drinks)} drinks, "
+                    f"category: {category_for_items}"
+                )
+
+                return {
+                    "liquors": liquors,
+                    "sodas": sodas,
+                    "cocktails": cocktails,
+                    "drinks": drinks,
+                    "new_category": new_category,
+                    "category_for_items": category_for_items
+                }
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse smart_parse JSON: {e}")
+                return {"liquors": [], "sodas": [], "cocktails": [], "drinks": [], "category": None}
+
+        except Exception as e:
+            logger.error(f"Error in smart_parse: {str(e)}")
+            return {"liquors": [], "sodas": [], "cocktails": [], "drinks": [], "category": None}
 
 
 # Singleton instance

@@ -1,7 +1,7 @@
 'use client'
 
 import { DashboardLayout } from '@/components/layouts/dashboard-layout'
-import { LayoutDashboard, Users, Wine, ShoppingBag, Settings } from 'lucide-react'
+import { LayoutDashboard, Users, Wine, ShoppingBag, Settings, Beaker } from 'lucide-react'
 import { useAuth } from '@/lib/providers/auth-provider'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -172,6 +172,11 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
       label: 'Bartenders',
       href: '/club/bartenders',
       icon: <Users className="h-4 w-4" />,
+    },
+    {
+      label: 'Ingredients',
+      href: '/club/ingredients',
+      icon: <Beaker className="h-4 w-4" />,
     },
     {
       label: 'Drinks',
