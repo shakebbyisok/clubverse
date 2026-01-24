@@ -57,4 +57,3 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 # Serve uploaded files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-
